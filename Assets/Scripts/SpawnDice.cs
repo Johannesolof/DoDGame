@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using System.Collections;
 
 public class SpawnDice : MonoBehaviour
@@ -15,16 +16,21 @@ public class SpawnDice : MonoBehaviour
 	void Update () {
 	    if (Input.GetMouseButtonDown(0))
 	    {
-
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
             // Casts the ray and get the first game object hit
             Physics.Raycast(ray, out hit);
             Debug.Log("This hit at " + hit.point);
-	        var pos = hit.point;
-	        pos.y += 2;
-            if (dice != null)
-                Instantiate(dice, pos, Quaternion.identity);
+            
+	        var pos = hit.point - ray.direction;
+	        if (dice != null)
+	        {
+	            GameObject ins = (GameObject) Instantiate(dice, ray.origin, Quaternion.identity);
+	            var rg = ins.GetComponent<Rigidbody>();
+	            rg.velocity = ray.direction*12;
+	            float rotValue = 5f;
+                rg.angularVelocity = new Vector3(UnityEngine.Random.Range(-rotValue, rotValue), UnityEngine.Random.Range(-rotValue, rotValue), UnityEngine.Random.Range(-rotValue, rotValue));
+	        }
 	    }
 	}
 }
