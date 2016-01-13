@@ -6,7 +6,12 @@ public class NetworkingTest : MonoBehaviour {
 
 	public bool isAtStartup = true;
 
-	NetworkClient myClient;
+	private NetworkClient myClient;
+	private PlayerLog eventLog;
+
+	void Start () {
+		eventLog = GetComponent<PlayerLog>();
+	}
 
 	void Update () 
 	{
@@ -68,13 +73,13 @@ public class NetworkingTest : MonoBehaviour {
 	// client function
 	public void OnConnected(NetworkMessage netMsg)
 	{
-		Debug.Log("Connected to server " + netMsg.conn.address);
+		eventLog.AddEvent("[Server] A player has connected from " + netMsg.conn.address, true);
 	}
 
 	// on client function
 	public void OnClient(NetworkMessage netMsg)
 	{
-		Debug.Log("Connected client " + netMsg.conn.address);
+		eventLog.AddEvent("[Client] Connected to server " + netMsg.conn.address, true);
 	}
 }
 
