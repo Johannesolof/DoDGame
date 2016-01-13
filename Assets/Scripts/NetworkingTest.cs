@@ -44,6 +44,7 @@ public class NetworkingTest : MonoBehaviour {
 	public void SetupServer()
 	{
 		NetworkServer.Listen(47624);
+		NetworkServer.RegisterHandler(MsgType.Connect, OnClient);
 		isAtStartup = false;
 	}
 
@@ -68,6 +69,12 @@ public class NetworkingTest : MonoBehaviour {
 	public void OnConnected(NetworkMessage netMsg)
 	{
 		Debug.Log("Connected to server " + netMsg.conn.address);
+	}
+
+	// on client function
+	public void OnClient(NetworkMessage netMsg)
+	{
+		Debug.Log("Connected client " + netMsg.conn.address);
 	}
 }
 
