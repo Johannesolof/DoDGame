@@ -6,6 +6,7 @@ public class PlayerLog : MonoBehaviour
 {
 	// Private VARS
 	private int displayElementsPerScreen = 11;
+	private int displayScrollSpeed = 4;
 
 	private List<string> Eventlog = new List<string>();
 	private string guiTextToShow = "";
@@ -43,12 +44,13 @@ public class PlayerLog : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.PageUp))
 		{
-			if(displayOffset < Eventlog.Count - 1) ++displayOffset;
+			displayOffset += displayScrollSpeed;
+			if(displayOffset > Eventlog.Count - 1) displayOffset = Eventlog.Count - 1;
 			recalcDisplay();
 		}
 		if (Input.GetKeyDown(KeyCode.PageDown))
 		{
-			--displayOffset;
+			displayOffset -= displayScrollSpeed;
 			if(displayOffset < 0) displayOffset = 0;
 			recalcDisplay();
 		}
