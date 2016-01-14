@@ -5,8 +5,11 @@ using System.Collections.Generic;
 public class PlayerLog : MonoBehaviour 
 {
 	// Private VARS
+	private int displayElementsPerScreen = 11;
+
 	private List<string> Eventlog = new List<string>();
 	private string guiTextToShow = "";
+	private string[] DisplayArray;
 
 	private float rectWidth = Screen.width / 5;
 	private float rectHeight = Screen.height / 5;
@@ -16,7 +19,7 @@ public class PlayerLog : MonoBehaviour
 	private bool showConsole = true;
 
 	private int displayOffset = 0;
-	private int displayElementsPerScreen = 12;
+
 
 	// Public VARS
 	public int maxLines = 5;
@@ -40,7 +43,7 @@ public class PlayerLog : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.PageUp))
 		{
-			if(!(displayOffset > Eventlog.Count - displayElementsPerScreen)) ++displayOffset;
+			if(displayOffset < Eventlog.Count - 1) ++displayOffset;
 			recalcDisplay();
 		}
 		if (Input.GetKeyDown(KeyCode.PageDown))
@@ -63,16 +66,37 @@ public class PlayerLog : MonoBehaviour
 		if (Eventlog.Count > maxLines)
 			Eventlog.RemoveAt(0);
 
+		if (displayOffset != 0)
+			++displayOffset;
+
 		recalcDisplay();
 	}
 
 
 	private void recalcDisplay () {
+		DisplayArray = new string[displayElementsPerScreen];
+
+		for (int i = 0; i < displayElementsPerScreen; ++i) {
+			if (i == Eventlog.Count) {
+				break;
+			}
+			if (Eventlog.Count - displayOffset - i - 1 < 0) {
+				DisplayArray [displayElementsPerScreen - i - 1] = "";
+			} else {
+				DisplayArray [displayElementsPerScreen - i - 1] = Eventlog [Eventlog.Count - displayOffset - i - 1];
+			}
+		}
+
 		guiTextToShow = "";
 
-		for (int i = Mathf.Max(Eventlog.Count - displayElementsPerScreen - displayOffset, 0); i < Eventlog.Count - displayOffset; ++i) {
-			guiTextToShow += Eventlog[i];
+		foreach (string s in DisplayArray) {
+			guiTextToShow += s;
 			guiTextToShow += "\n";
 		}
+
+//		for (int i = Mathf.Max(Eventlog.Count - displayElementsPerScreen - displayOffset, 0); i < Eventlog.Count - displayOffset; ++i) {
+//			guiTextToShow += DisplayArray[i];
+//			guiTextToShow += "\n";
+//		}
 	}
 }
