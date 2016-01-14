@@ -39,12 +39,12 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		if (isAtStartup)
 		{
-			GUI.Label(new Rect(2, 10, 200, 100), "Press S for server");     
-			GUI.Label(new Rect(2, 30, 200, 100), "Press B for both");       
-			GUI.Label(new Rect(2, 50, 200, 100), "Press C for client");
-			GUI.Label(new Rect(2, 70, 200, 100), "Press Q to toggle console");
-			GUI.Label(new Rect(2, 90, 200, 100), "Press M log sample message");
-			GUI.Label(new Rect(2, 110, 250, 100), "Press PgUp/PgDown to scroll console");
+			GUI.Label(new Rect(10, 10, 200, 100), "Press S for server");     
+			GUI.Label(new Rect(10, 30, 200, 100), "Press B for both");       
+			GUI.Label(new Rect(10, 50, 200, 100), "Press C for client");
+			GUI.Label(new Rect(10, 70, 200, 100), "Press Q to toggle console");
+			GUI.Label(new Rect(10, 90, 200, 100), "Press M log sample message");
+			GUI.Label(new Rect(10, 110, 250, 100), "Press PgUp/PgDown to scroll console");
 		}
 	}
 
