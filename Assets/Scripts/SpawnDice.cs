@@ -5,7 +5,7 @@ using System.Collections;
 public class SpawnDice : MonoBehaviour
 {
 
-    public GameObject dice;
+    public GameObject[] dice;
 
 	// Use this for initialization
 	void Start () {
@@ -25,7 +25,7 @@ public class SpawnDice : MonoBehaviour
 	        var pos = hit.point - ray.direction;
 	        if (dice != null)
 	        {
-	            GameObject ins = (GameObject) Instantiate(dice, ray.origin, Quaternion.identity);
+                GameObject ins = (GameObject) Instantiate(dice[UnityEngine.Random.Range(0, dice.Length-1)] , ray.origin + ray.direction*2, Quaternion.identity);
 	            var rg = ins.GetComponent<Rigidbody>();
 	            rg.velocity = ray.direction*12;
 	            float rotValue = 5f;
