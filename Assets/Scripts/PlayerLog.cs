@@ -12,7 +12,7 @@ public class PlayerLog : MonoBehaviour
 	private string guiTextToShow = "";
 	private string[] DisplayArray;
 
-	private bool autoScroll;
+	private bool autoScroll = true;
 
 	private float rectWidth = Screen.width / 5;
 	private float rectHeight = Screen.height / 5;
@@ -55,7 +55,7 @@ public class PlayerLog : MonoBehaviour
 
 			GUILayout.EndScrollView();
 
-			autoScroll = GUILayout.Toggle (true, "Autoscroll");
+			autoScroll = GUILayout.Toggle (autoScroll, "Autoscroll");
 
 			GUILayout.EndArea();
 		}
