@@ -9,7 +9,6 @@ public class PlayerLog : MonoBehaviour
 	NetworkingTest networkingTest;
 	List<string> Eventlog = new List<string>();
 	string guiTextToShow = "";
-	string[] DisplayArray;
 
 	string chatMessage = "";
 	bool autoScroll = true;
@@ -23,7 +22,6 @@ public class PlayerLog : MonoBehaviour
 
 	Vector2 scrollPos = new Vector2 (0, 0);
 	Rect consoleViewRect;
-	Rect scrollViewRect;
 
 	Texture2D border;
 	GUIStyle wooden_guiStyle;
@@ -119,7 +117,7 @@ public class PlayerLog : MonoBehaviour
 	}
 
 
-	public void AddEvent(string eventString, bool sendToDebugLog = false, bool sendOverNetwork = false)
+	void AddEvent(string eventString, bool sendToDebugLog = false, bool sendOverNetwork = false)
 	{
 		if(sendToDebugLog)
 			Debug.Log(eventString);
@@ -138,7 +136,10 @@ public class PlayerLog : MonoBehaviour
 
 	public void AddTaggedEvent(string tag, string eventString, bool sendToDebugLog = false, bool sendOverNetwork = false)
 	{
-		AddEvent("[" +  tag + "] " + eventString, sendToDebugLog, sendOverNetwork);
+		if( tag == "" )
+			AddEvent(eventString, sendToDebugLog, sendOverNetwork);
+		else
+			AddEvent("[" +  tag + "] " + eventString, sendToDebugLog, sendOverNetwork);
 	}
 
 	void recalcDisplay () {
