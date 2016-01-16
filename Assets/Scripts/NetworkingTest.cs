@@ -351,10 +351,18 @@ public class NetworkingTest : MonoBehaviour {
 				Player p;
 				if ( existPlayerByID(connectedPlayers, msg.playerID, out p) )
 				{
-					eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.name, true);
-					p.name = msg.name;
+					if ( existPlayerByName(connectedPlayers, msg.name ) ) // Name is already occupied
+					{
+						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.playerID, msg.name, true), DodChannels.reliable, p.connection);
+						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s  name change failed, to: " + msg.name, true);
+					}
+					else // Acknowledge the name change
+					{
+						ServerSendMessage(DodNet.MsgId.NameChange, msg, DodChannels.reliable, connectedPlayers);
+						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.name, true);
+					}
 
-					ServerSendMessage(DodNet.MsgId.NameChange, msg, DodChannels.reliable, connectedPlayers);
+					p.name = msg.name;
 				}
 			}
 			break;
@@ -421,7 +429,22 @@ public class NetworkingTest : MonoBehaviour {
 				Player p;
 				if ( existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
-					eventLog.AddTaggedEvent(clientTag, printPlayerName(p) + " is now known as " + msg.name, true);
+					if( msg.playerID == myID ) // Its me, check if it failed or not
+					{
+						if ( msg.failed ) // Was not successful
+						{
+							eventLog.AddTaggedEvent(clientTag, "Name change failed. " + msg.name + " is already occupied.", true);
+						}
+						else
+						{
+							eventLog.AddTaggedEvent(clientTag, "Your new name is " + msg.name, true);
+						}
+					}
+					else // Someone else changed their name
+					{
+						eventLog.AddTaggedEvent(clientTag, printPlayerName(p) + " is now known as " + msg.name, true);
+					}
+
 					p.name = msg.name;
 				}
 			}
@@ -621,10 +644,11 @@ public class NetworkingTest : MonoBehaviour {
 		public class NameChange : MessageBase
 		{
 			public NameChange() {}
-			public NameChange(byte id, string Name) { playerID = id; name = Name; }
+			public NameChange(byte id, string Name, bool Failed = false) { playerID = id; name = Name; failed = Failed; }
 
 			public byte playerID;
 			public string name;
+			public bool failed;
 		}
 
 		public class PlayerCon : MessageBase
