@@ -6,30 +6,30 @@ using UnityEngine.UI;
 public class PlayerLog : MonoBehaviour 
 {
 	// Private VARS
-	private NetworkingTest networkingTest;
-	private List<string> Eventlog = new List<string>();
-	private string guiTextToShow = "";
-	private string[] DisplayArray;
+	NetworkingTest networkingTest;
+	List<string> Eventlog = new List<string>();
+	string guiTextToShow = "";
+	string[] DisplayArray;
 
-	private string chatMessage = "";
-	private bool autoScroll = true;
+	string chatMessage = "";
+	bool autoScroll = true;
 
-	private float rectWidth;
-	private float rectHeight;
-	private float rectX;
-	private float rectY;
+	float rectWidth;
+	float rectHeight;
+	float rectX;
+	float rectY;
 
-	private bool showConsole = true;
+	bool showConsole = true;
 
-	private Vector2 scrollPos = new Vector2 (0, 0);
-	private Rect consoleViewRect;
-	private Rect scrollViewRect;
+	Vector2 scrollPos = new Vector2 (0, 0);
+	Rect consoleViewRect;
+	Rect scrollViewRect;
 
-	private Texture2D border;
-	private GUIStyle wooden_guiStyle;
+	Texture2D border;
+	GUIStyle wooden_guiStyle;
 
 	// Public VARS
-	public int maxLines = 5;
+	public int maxLines = 255;
 
 
 	void Start () {
@@ -87,7 +87,7 @@ public class PlayerLog : MonoBehaviour
 						GUI.GetNameOfFocusedControl() == "chatbox" &&
 						chatMessage != "")
 					{
-						AddEvent(chatMessage, false, true);
+						networkingTest.SendChatMessage(chatMessage);
 						chatMessage = "";
 					}
 					GUILayout.Space(2);
@@ -124,9 +124,6 @@ public class PlayerLog : MonoBehaviour
 		if(sendToDebugLog)
 			Debug.Log(eventString);
 
-		if(sendOverNetwork)
-			networkingTest.BroadcastStringToConsole(eventString);
-
 		if (autoScroll)
 			scrollPos = new Vector2 (float.PositiveInfinity, float.PositiveInfinity);
 
@@ -139,8 +136,12 @@ public class PlayerLog : MonoBehaviour
 		recalcDisplay();
 	}
 
+	public void AddTaggedEvent(string tag, string eventString, bool sendToDebugLog = false, bool sendOverNetwork = false)
+	{
+		AddEvent("[" +  tag + "] " + eventString, sendToDebugLog, sendOverNetwork);
+	}
 
-	private void recalcDisplay () {
+	void recalcDisplay () {
 
 		guiTextToShow = "";
 
