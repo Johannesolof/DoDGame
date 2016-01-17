@@ -188,6 +188,7 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		if(isServer)
 		{
+			NetworkServer.DisconnectAll();
 			NetworkServer.Shutdown();
 			NetworkServer.Reset();
 		}
@@ -314,7 +315,6 @@ public class NetworkingTest : MonoBehaviour {
 		foreach(Player p in players)
 		{
 			p.connection.SendByChannel((short)id, msg, channel);
-			eventLog.AddTaggedEvent(serverTag, "Sending to player conn(id) " + p.connection.address + "(" + p.playerID + ")", true);
 		}
 	}
 
@@ -364,7 +364,10 @@ public class NetworkingTest : MonoBehaviour {
 					eventLog.AddTaggedEvent(serverTag, "Player connected: " + printPlayerName(p) + " from " + netMsg.conn.address, true);
 
 					ServerSendMessage(DodNet.MsgId.PlayerCon,
-						new DodNet.PlayerCon(p), DodChannels.reliable, connectedPlayers);
+						new DodNet.PlayerCon(p), DodChannels.reliable, connectedPlayers); // Inform everyone of the new player
+
+					ServerSendMessage(DodNet.MsgId.PlayerList,
+						new DodNet.PlayerList(connectedPlayers), DodChannels.reliable, netMsg.conn); // Let the new player know the current state of the server
 				}
 			}
 			break;
@@ -413,6 +416,13 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.PlayerDisc:
 			{
 				eventLog.AddTaggedEvent(serverTag, "PlayerDisc received: " + netMsg.msgType, true);
+			}
+			break;
+
+		case (short)DodNet.MsgId.PlayerList:
+			{
+				DodNet.PlayerList msg = netMsg.ReadMessage<DodNet.PlayerList>();
+				allPlayersClient = msg.list;
 			}
 			break;
 
@@ -682,6 +692,7 @@ public class NetworkingTest : MonoBehaviour {
 			NameChange,
 			PlayerCon,
 			PlayerDisc,
+			PlayerList,
 		}
 
 		public class UserLogin : MessageBase
@@ -736,6 +747,14 @@ public class NetworkingTest : MonoBehaviour {
 
 			public byte playerID;
 			public string reason;
+		}
+
+		public class PlayerList : MessageBase
+		{
+			public PlayerList() {}
+			public PlayerList(List<Player> List) { list = List; }
+
+			public List<Player> list;
 		}
 	}
 }
