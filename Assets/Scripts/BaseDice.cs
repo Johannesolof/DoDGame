@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 
@@ -23,7 +24,7 @@ public abstract class BaseDice : MonoBehaviour
 
     protected abstract List<Normal> GetNormals(int sides);
 
-    private bool _fadeInDone;
+    private bool _fadeInDone = false;
     public float Duration = 1f;
     private Color _startColor;
     private Color _endColor;
@@ -45,44 +46,28 @@ public abstract class BaseDice : MonoBehaviour
 	    {
 	        _lerp += Time.deltaTime/Duration;
 	        _renderer.material.color = Color.Lerp(_startColor, _endColor, _lerp);
-	    }
-
-	    if (_rigidbody.velocity.magnitude < 0.1)
-	    {
-	        switch (UpSide())
+	        if (_lerp >= 1)
 	        {
-                case 0:
-                    break;
-                default:
-                    break;
+	            _fadeInDone = true;
 	        }
-	        
 	    }
-
-	    
-
-
-
-        
-
-        
 	}
 
     void OnGUI()
     {
         Vector3 up = _transform.InverseTransformDirection(Vector3.up);
 
-        Normal closest = new Normal() {Value = 0, Direction = new Vector3(99, 99, 99)};
+        Normal closest = new Normal() {Value = -1, Direction = new Vector3(99, 99, 99)};
         foreach (var normal in _normals)
         {
-            if (closest.Value == 0 || (normal.Direction - up).magnitude < closest.Direction.magnitude)
+            if (closest.Value == -1 || (normal.Direction - up).magnitude < closest.Direction.magnitude)
                 closest = normal;
         }
 
 
         var point = Camera.main.WorldToScreenPoint(_transform.position);
 
-        GUI.Label(new Rect(point.x - 100, Camera.main.pixelHeight - point.y -50, 200, 100), up + " | " + closest.Value);
+        GUI.Label(new Rect(point.x - 100, Camera.main.pixelHeight - point.y -50, 200, 100), String.Format("({0:F}, {1:F}, {2:F}) | {3}", up.x, up.y, up.z, closest.Value));
     }
 
     int UpSide()
