@@ -314,6 +314,7 @@ public class NetworkingTest : MonoBehaviour {
 		foreach(Player p in players)
 		{
 			p.connection.SendByChannel((short)id, msg, channel);
+			eventLog.AddTaggedEvent(serverTag, "Sending to player conn(id) " + p.connection.address + "(" + p.playerID + ")", true);
 		}
 	}
 
