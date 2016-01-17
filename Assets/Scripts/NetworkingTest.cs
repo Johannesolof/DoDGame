@@ -135,16 +135,22 @@ public class NetworkingTest : MonoBehaviour {
 		{
 			myClient = ClientScene.ConnectLocalServer();
 			myClient.Configure(hostconfig);
+
 			myClient.RegisterHandler(MsgType.Connect, OnConnected);
 			myClient.RegisterHandler(MsgType.Disconnect, ConnectionFailed);
+			registerAllDodCallbacks(myClient, cbClientHandler);
 		}
 		else
 		{
 			myClient = new NetworkClient();
 			myClient.Configure(hostconfig);
+
 			myClient.RegisterHandler(MsgType.Connect, OnConnected);
 			myClient.RegisterHandler(MsgType.Disconnect, ConnectionFailed);
+			registerAllDodCallbacks(myClient, cbClientHandler);
+
 			eventLog.AddTaggedEvent(clientTag, "Setup complete", true);
+
 			myClient.Connect(adress, port);
 		}
 
@@ -198,21 +204,16 @@ public class NetworkingTest : MonoBehaviour {
 
 	void OnClientAccept(NetworkConnection nc)
 	{
-		eventLog.AddTaggedEvent(serverTag, "Accepting " + nc.address, true);
 		if ( !whiteList.ContainsKey( nc.address ) ) // White list him for default amount of time, if he is not already white listed
 		{
 			whiteList.Add(nc.address, DateTime.Now);
 		}
 
-		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
-			nc.RegisterHandler((short)MsgId, cbServerHandler);
+		registerAllDodCallbacks(nc, cbServerHandler);
 
 		byte newID = giveUniquePlayerID();
-		eventLog.AddTaggedEvent(serverTag, "ID " + newID, true);
 
-		ServerSendMessage(DodNet.MsgId.UserLogin,
-			new DodNet.UserLogin(newID, ""),
-			DodChannels.reliable, nc);
+		StartCoroutine( serverDelayBeforeSendingHandshake(newID, nc) );
 	}
 
 	void OnClientRefuse(NetworkConnection nc)
@@ -239,12 +240,8 @@ public class NetworkingTest : MonoBehaviour {
 	// CLIENT SIDE
 	void OnConnected(NetworkMessage netMsg)
 	{
-		eventLog.AddTaggedEvent(noTag, "Connected to server " + netMsg.conn.address, true);
 		myClient.UnregisterHandler(MsgType.Disconnect);
 		myClient.RegisterHandler(MsgType.Disconnect, OnDisconnected);
-
-		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
-			myClient.RegisterHandler((short)MsgId, cbClientHandler);
 	}
 	void ConnectionFailed(NetworkMessage netMsg)
 	{
@@ -407,7 +404,6 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.UserLogin:
 			{
 				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
-				eventLog.AddTaggedEvent(clientTag, "ID Received: " + msg.playerID, true);
 				myID = msg.playerID;
 				ClientSendMessage(DodNet.MsgId.UserLogin,
 					new DodNet.UserLogin(myID, myName),
@@ -472,7 +468,7 @@ public class NetworkingTest : MonoBehaviour {
 				if(msg.playerID != myID)
 					eventLog.AddTaggedEvent(noTag, "Player connected: " + printPlayerName(p), true);
 				else
-					eventLog.AddTaggedEvent(noTag, "Connected with ID: " + myID, true);
+					eventLog.AddTaggedEvent(noTag, "Connected to " + adress + ":" + port + " with ID: " + myID, true);
 			}
 			break;
 
@@ -498,6 +494,18 @@ public class NetworkingTest : MonoBehaviour {
 	// ========================= UTILITY FUNCTIONS =========================
 	// ===========================================================================
 
+	void registerAllDodCallbacks ( NetworkConnection nc, NetworkMessageDelegate nmd )
+	{
+		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
+			nc.RegisterHandler((short)MsgId, nmd);
+	}
+
+	void registerAllDodCallbacks ( NetworkClient nc, NetworkMessageDelegate nmd )
+	{
+		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
+			nc.connection.RegisterHandler((short)MsgId, nmd);
+	}
+
 	byte giveUniquePlayerID()
 	{
 		byte newID;
@@ -506,6 +514,16 @@ public class NetworkingTest : MonoBehaviour {
 			newID = (byte)UnityEngine.Random.Range(PlayerIdsLowerBound, PlayerIdsUpperBound);
 		} while ( existPlayerByID( connectedPlayers, newID ) );
 		return newID;
+	}
+
+	IEnumerator serverDelayBeforeSendingHandshake( byte newID, NetworkConnection nc )
+	{
+		yield return new WaitForSeconds(0.01f);
+
+		ServerSendMessage(DodNet.MsgId.UserLogin,
+			new DodNet.UserLogin(newID, ""),
+			DodChannels.reliable, nc);
+		// return null;
 	}
 
 	string printPlayerName(Player p)
