@@ -533,7 +533,7 @@ public class NetworkingTest : MonoBehaviour {
 	void registerAllDodCallbacks ( NetworkClient nc, NetworkMessageDelegate nmd )
 	{
 		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
-			nc.connection.RegisterHandler((short)MsgId, nmd);
+			nc.RegisterHandler((short)MsgId, nmd);
 	}
 
 	byte giveUniquePlayerID()
