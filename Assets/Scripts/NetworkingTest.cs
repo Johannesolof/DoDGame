@@ -428,8 +428,7 @@ public class NetworkingTest : MonoBehaviour {
 
 		case (short)DodNet.MsgId.PlayerList:
 			{
-				DodNet.PlayerList msg = netMsg.ReadMessage<DodNet.PlayerList>();
-//				allPlayersClient = msg.list;
+				eventLog.AddTaggedEvent(serverTag, "PlayerList received: " + netMsg.msgType, true);
 			}
 			break;
 
@@ -529,6 +528,13 @@ public class NetworkingTest : MonoBehaviour {
 					eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " disconnected. Reason: " + msg.reason, true);
 					allPlayersClient.Remove(p);
 				}
+			}
+			break;
+
+		case (short)DodNet.MsgId.PlayerList:
+			{
+				DodNet.PlayerList msg = netMsg.ReadMessage<DodNet.PlayerList>();
+				allPlayersClient = msg.GetArrayAsList();
 			}
 			break;
 
@@ -699,9 +705,20 @@ public class NetworkingTest : MonoBehaviour {
 		public class PlayerList : MessageBase
 		{
 			public PlayerList() {}
-			public PlayerList(List<DodPlayer> List) { list = List; }
+			public PlayerList(List<DodPlayer> List) { array = List.ToArray(); }
 
-			public List<DodPlayer> list;
+			public DodPlayer[] array;
+
+
+			public List<DodPlayer> GetArrayAsList ()
+			{
+				List<DodPlayer> L = new List<DodPlayer>();
+				foreach(DodPlayer p in array)
+				{
+					L.Add(p);
+				}
+				return L;
+			}
 		}
 	}
 }
