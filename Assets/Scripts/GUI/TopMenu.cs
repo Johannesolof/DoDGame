@@ -1,12 +1,21 @@
-﻿using System;
+﻿using UnityEngine;
+using UnityEngine.UI;
 
-namespace AssemblyCSharp
+public class TopMenu : MonoBehaviour
 {
-	public class TopMenu
+	void Start()
 	{
-		public TopMenu ()
-		{
-		}
+		
+	}
+
+	void Update()
+	{
+
+	}
+
+	void OnGUI()
+	{
+		
 	}
 }
 
