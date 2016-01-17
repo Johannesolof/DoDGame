@@ -26,7 +26,9 @@ public class NetworkingTest : MonoBehaviour {
 	ConnectionConfig config;
 	HostTopology hostconfig;
 	int port = 47624; // TODO: Make user able to choose the port and ip
-	string adress = "213.114.70.200"; // "213.114.70.247";
+	string adress = "213.114.70.247";
+	const string localServer = "localServer";
+	const string localClient = "localClient";
 
 	List<Player> connectedPlayers, allPlayersClient;
 	Dictionary<string, DateTime> whiteList;
@@ -38,10 +40,15 @@ public class NetworkingTest : MonoBehaviour {
 	bool isAtStartup = true;
 
 
-	void Start () {
+	void Start () 
+	{
 		eventLog = GetComponent<PlayerLog>();
 		isServer = false;
+		SetupAllVariables();
+	}
 
+	void SetupAllVariables()
+	{
 		connectedPlayers = new List<Player>();
 		allPlayersClient = new List<Player>();
 		whiteList = new Dictionary<string, DateTime>();
@@ -75,16 +82,33 @@ public class NetworkingTest : MonoBehaviour {
 		}
 		else
 		{
-			if (Input.GetKeyDown(KeyCode.N))
-			{
-				ClientSendMessage(DodNet.MsgId.NameChange,
-					new DodNet.NameChange(myID, "JudeJohan"), DodChannels.reliable);
-			}
-
 			if (Input.GetKeyDown(KeyCode.T))
 			{
 				ResetClientAndServerAndRestart();
+				Start();
 			}
+			if (Input.GetKeyDown(KeyCode.N))
+			{
+				ClientSendMessage(DodNet.MsgId.NameChange,
+					new DodNet.NameChange(myID, "JudeJohan"),
+					DodChannels.reliable);
+			}
+
+//			if (Input.GetKeyDown(KeyCode.D))
+//			{
+//				if ( myClient != null && myClient.isConnected )
+//				{
+//					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
+//					myClient.Disconnect();
+//					myClient.Shutdown();
+//					myClient = null;
+//					NetworkServer.DisconnectAll();
+//					foreach( NetworkConnection c in NetworkServer.connections )
+//					{
+//						c.Disconnect();
+//					}
+//				}
+//			}
 
 			// TODO: Move this stuff to a more appropriate place and handle in a more delicate fashion
 			if(isServer && pendingConnections.Count > 0)
@@ -107,6 +131,7 @@ public class NetworkingTest : MonoBehaviour {
 		}
 		else
 		{
+//			GUI.Label(new Rect(10, 30, 200, 100), "Press D to disconnect");
 			GUI.Label(new Rect(10, 50, 200, 100), "Press T to terminate networking");
 			GUI.Label(new Rect(10, 70, 200, 100), "Press Q to toggle console");
 			GUI.Label(new Rect(10, 90, 200, 100), "Press M log sample message");
@@ -126,6 +151,7 @@ public class NetworkingTest : MonoBehaviour {
 		NetworkServer.RegisterHandler(MsgType.Connect, OnClientConnected);
 		isServer = true;
 		eventLog.AddTaggedEvent(serverTag, "Setup complete", true);
+		adress = localServer;
 	}
 
 	// Create a client and connect to the server port
@@ -191,7 +217,7 @@ public class NetworkingTest : MonoBehaviour {
 
 			if ( whiteList.ContainsKey( netMsg.conn.address ) )
 			{
-				if ( whiteList[netMsg.conn.address] + whiteListTimeOut > DateTime.Now )
+				if ( whiteList[netMsg.conn.address] > DateTime.Now )
 				{
 					OnClientAccept(netMsg.conn);
 					return;
@@ -206,7 +232,7 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		if ( !whiteList.ContainsKey( nc.address ) ) // White list him for default amount of time, if he is not already white listed
 		{
-			whiteList.Add(nc.address, DateTime.Now);
+			whiteList.Add(nc.address, DateTime.Now + whiteListTimeOut);
 		}
 
 		registerAllDodCallbacks(nc, cbServerHandler);
@@ -250,7 +276,7 @@ public class NetworkingTest : MonoBehaviour {
 	}
 	void OnDisconnected(NetworkMessage netMsg)
 	{
-		eventLog.AddTaggedEvent(clientTag, "Disconnected from server " + adress + ":" + port, true);
+		eventLog.AddTaggedEvent(clientTag, "Disconnected from server " + printServerAdress(), true);
 		ResetClientAndServerAndRestart();
 	}
 
@@ -334,7 +360,7 @@ public class NetworkingTest : MonoBehaviour {
 					Player p = new Player(msg.playerID, msg.name, netMsg.conn);
 					connectedPlayers.Add(p);
 
-					eventLog.AddTaggedEvent(serverTag, "Player connected: " + printPlayerName(p), true);
+					eventLog.AddTaggedEvent(serverTag, "Player connected: " + printPlayerName(p) + " from " + netMsg.conn.address, true);
 
 					ServerSendMessage(DodNet.MsgId.PlayerCon,
 						new DodNet.PlayerCon(p), DodChannels.reliable, connectedPlayers);
@@ -466,9 +492,13 @@ public class NetworkingTest : MonoBehaviour {
 				Player p;
 				allPlayersClient.Add(p = new Player(msg.playerID, msg.name, null));
 				if(msg.playerID != myID)
+				{
 					eventLog.AddTaggedEvent(noTag, "Player connected: " + printPlayerName(p), true);
+				}
 				else
-					eventLog.AddTaggedEvent(noTag, "Connected to " + adress + ":" + port + " with ID: " + myID, true);
+				{
+					eventLog.AddTaggedEvent(noTag, "Connected to " + printServerAdress() + " with ID: " + myID, true);
+				}
 			}
 			break;
 
@@ -530,6 +560,12 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		if(isServer) return p.name + "(" + p.playerID + ")";
 		return p.name;
+	}
+
+	string printServerAdress ()
+	{
+		if ( adress == localServer) return adress;
+		return adress + ":" + port;
 	}
 
 
