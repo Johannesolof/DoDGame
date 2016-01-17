@@ -13,6 +13,7 @@ public class NetworkingTest : MonoBehaviour {
 	const string serverTag = "Server";
 	const string clientTag = "Client";
 	const string chatTag = "";
+	const string noTag = "";
 	const short JJMSG_ID_OFFSET = short.MaxValue/2;
 	const int maxConcurrentConnectedUsers = 10;
 	const byte SERVERID = 0;
@@ -30,6 +31,7 @@ public class NetworkingTest : MonoBehaviour {
 	List<Player> connectedPlayers, allPlayersClient;
 	Dictionary<string, DateTime> whiteList;
 	Queue<NetworkConnection> pendingConnections;
+	Queue<Action<Delegate>> nextUpdateAction;
 
 	TimeSpan whiteListTimeOut = new TimeSpan(6,0,0); // 6 hours for the whitelist to time out
 
@@ -44,6 +46,7 @@ public class NetworkingTest : MonoBehaviour {
 		allPlayersClient = new List<Player>();
 		whiteList = new Dictionary<string, DateTime>();
 		pendingConnections = new Queue<NetworkConnection>();
+		nextUpdateAction = new Queue<Action<Delegate>>();
 
 		config = new ConnectionConfig();
 		DodChannels.priority = config.AddChannel(QosType.AllCostDelivery);
@@ -140,7 +143,6 @@ public class NetworkingTest : MonoBehaviour {
 			myClient = new NetworkClient();
 			myClient.Configure(hostconfig);
 			myClient.RegisterHandler(MsgType.Connect, OnConnected);
-			// TODO: ConnectionFailed does not seem to work?
 			myClient.RegisterHandler(MsgType.Disconnect, ConnectionFailed);
 			eventLog.AddTaggedEvent(clientTag, "Setup complete", true);
 			myClient.Connect(adress, port);
@@ -171,23 +173,32 @@ public class NetworkingTest : MonoBehaviour {
 	// SERVER SIDE
 	void OnClientConnected(NetworkMessage netMsg)
 	{
-		eventLog.AddTaggedEvent(serverTag, "A peer has connected from " + netMsg.conn.address, true);
 		netMsg.conn.RegisterHandler(MsgType.Disconnect, OnClientDisconnected);
 
-		if ( whiteList.ContainsKey( netMsg.conn.address ) )
+		if ( netMsg.conn.address == "localClient" )
 		{
-			if ( whiteList[netMsg.conn.address] + whiteListTimeOut > DateTime.Now )
-			{
-				OnClientAccept(netMsg.conn);
-				return;
-			}
-			whiteList.Remove(netMsg.conn.address);
+			OnClientAccept(netMsg.conn);
 		}
-		pendingConnections.Enqueue(netMsg.conn);
+		else
+		{
+			eventLog.AddTaggedEvent(serverTag, "A peer has connected from " + netMsg.conn.address, true);
+
+			if ( whiteList.ContainsKey( netMsg.conn.address ) )
+			{
+				if ( whiteList[netMsg.conn.address] + whiteListTimeOut > DateTime.Now )
+				{
+					OnClientAccept(netMsg.conn);
+					return;
+				}
+				whiteList.Remove(netMsg.conn.address);
+			}
+			pendingConnections.Enqueue(netMsg.conn);
+		}
 	}
 
 	void OnClientAccept(NetworkConnection nc)
 	{
+		eventLog.AddTaggedEvent(serverTag, "Accepting " + nc.address, true);
 		if ( !whiteList.ContainsKey( nc.address ) ) // White list him for default amount of time, if he is not already white listed
 		{
 			whiteList.Add(nc.address, DateTime.Now);
@@ -197,6 +208,7 @@ public class NetworkingTest : MonoBehaviour {
 			nc.RegisterHandler((short)MsgId, cbServerHandler);
 
 		byte newID = giveUniquePlayerID();
+		eventLog.AddTaggedEvent(serverTag, "ID " + newID, true);
 
 		ServerSendMessage(DodNet.MsgId.UserLogin,
 			new DodNet.UserLogin(newID, ""),
@@ -227,11 +239,12 @@ public class NetworkingTest : MonoBehaviour {
 	// CLIENT SIDE
 	void OnConnected(NetworkMessage netMsg)
 	{
-		eventLog.AddTaggedEvent(clientTag, "Connected to server " + netMsg.conn.address, true);
-		netMsg.conn.RegisterHandler(MsgType.Disconnect, OnDisconnected);
+		eventLog.AddTaggedEvent(noTag, "Connected to server " + netMsg.conn.address, true);
+		myClient.UnregisterHandler(MsgType.Disconnect);
+		myClient.RegisterHandler(MsgType.Disconnect, OnDisconnected);
 
 		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
-			netMsg.conn.RegisterHandler((short)MsgId, cbClientHandler);
+			myClient.RegisterHandler((short)MsgId, cbClientHandler);
 	}
 	void ConnectionFailed(NetworkMessage netMsg)
 	{
@@ -394,6 +407,7 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.UserLogin:
 			{
 				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
+				eventLog.AddTaggedEvent(clientTag, "ID Received: " + msg.playerID, true);
 				myID = msg.playerID;
 				ClientSendMessage(DodNet.MsgId.UserLogin,
 					new DodNet.UserLogin(myID, myName),
@@ -433,16 +447,16 @@ public class NetworkingTest : MonoBehaviour {
 					{
 						if ( msg.failed ) // Was not successful
 						{
-							eventLog.AddTaggedEvent(clientTag, "Name change failed. " + msg.name + " is already occupied.", true);
+							eventLog.AddTaggedEvent(noTag, "Name change failed. " + msg.name + " is already occupied.", true);
 						}
 						else
 						{
-							eventLog.AddTaggedEvent(clientTag, "Your new name is " + msg.name, true);
+							eventLog.AddTaggedEvent(noTag, "Your new name is " + msg.name, true);
 						}
 					}
 					else // Someone else changed their name
 					{
-						eventLog.AddTaggedEvent(clientTag, printPlayerName(p) + " is now known as " + msg.name, true);
+						eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " is now known as " + msg.name, true);
 					}
 
 					p.name = msg.name;
@@ -456,9 +470,9 @@ public class NetworkingTest : MonoBehaviour {
 				Player p;
 				allPlayersClient.Add(p = new Player(msg.playerID, msg.name, null));
 				if(msg.playerID != myID)
-					eventLog.AddTaggedEvent(clientTag, "Player connected: " + printPlayerName(p), true);
+					eventLog.AddTaggedEvent(noTag, "Player connected: " + printPlayerName(p), true);
 				else
-					eventLog.AddTaggedEvent(clientTag, "Connected with ID: " + myID, true);
+					eventLog.AddTaggedEvent(noTag, "Connected with ID: " + myID, true);
 			}
 			break;
 
@@ -468,7 +482,7 @@ public class NetworkingTest : MonoBehaviour {
 				Player p;
 				if ( existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
-					eventLog.AddTaggedEvent(clientTag, printPlayerName(p) + " disconnected. Reason: " + msg.reason, true);
+					eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " disconnected. Reason: " + msg.reason, true);
 					allPlayersClient.Remove(p);
 				}
 			}
