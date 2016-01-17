@@ -1,8 +1,12 @@
-﻿using UnityEngine;
+﻿using System;
 using System.Collections;
-using UnityEngine.Networking;
 using System.Collections.Generic;
-using System;
+
+using UnityEngine;
+using UnityEngine.Networking;
+
+using DodNS;
+
 
 public class NetworkingTest : MonoBehaviour {
 	
@@ -30,7 +34,9 @@ public class NetworkingTest : MonoBehaviour {
 	const string localServer = "localServer";
 	const string localClient = "localClient";
 
-	List<Player> connectedPlayers, allPlayersClient;
+	List<PlayerConnectionTuple> connectedPlayers;
+	List<DodPlayer> allPlayersClient;
+
 	Dictionary<string, DateTime> whiteList;
 	Queue<NetworkConnection> pendingConnections;
 	Queue<Action<Delegate>> nextUpdateAction;
@@ -49,8 +55,8 @@ public class NetworkingTest : MonoBehaviour {
 
 	void SetupAllVariables()
 	{
-		connectedPlayers = new List<Player>();
-		allPlayersClient = new List<Player>();
+		connectedPlayers = new List<PlayerConnectionTuple>();
+		allPlayersClient = new List<DodPlayer>();
 		whiteList = new Dictionary<string, DateTime>();
 		pendingConnections = new Queue<NetworkConnection>();
 		nextUpdateAction = new Queue<Action<Delegate>>();
@@ -253,13 +259,13 @@ public class NetworkingTest : MonoBehaviour {
 	void OnClientDisconnected(NetworkMessage netMsg)
 	{
 		eventLog.AddTaggedEvent(serverTag, "Peer disconnected: " + netMsg.conn.address, true);
-		Player p;
-		if ( existPlayerByConnection(connectedPlayers, netMsg.conn, out p) )
+		PlayerConnectionTuple p;
+		if ( Dod.existPlayerByConnection(connectedPlayers, netMsg.conn, out p) )
 		{
 			connectedPlayers.Remove( p );
 
 			ServerSendMessage(DodNet.MsgId.PlayerDisc,
-				new DodNet.PlayerDisc(p.playerID, p.dcReason),
+				new DodNet.PlayerDisc(p.player.playerID, p.player.dcReason),
 				DodChannels.reliable, connectedPlayers);
 		}
 	}
@@ -302,7 +308,7 @@ public class NetworkingTest : MonoBehaviour {
 		}
 	}
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, Player player)
+	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, PlayerConnectionTuple player)
 	{
 		if(player.connection.isConnected)
 			player.connection.SendByChannel((short)id, msg, channel);
@@ -310,9 +316,9 @@ public class NetworkingTest : MonoBehaviour {
 			eventLog.AddTaggedEvent(serverTag, "Player is not connected on client " + player.connection.address, true);
 	}
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, List<Player> players)
+	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, List<PlayerConnectionTuple> players)
 	{
-		foreach(Player p in players)
+		foreach(PlayerConnectionTuple p in players)
 		{
 			p.connection.SendByChannel((short)id, msg, channel);
 		}
@@ -349,7 +355,7 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.UserLogin:  // Last part of user connecting to the server. Check if name is free
 			{
 				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
-				if ( existPlayerByName(connectedPlayers, msg.name) )
+				if ( Dod.existPlayerByName(connectedPlayers, msg.name) )
 				{
 					ServerSendMessage(DodNet.MsgId.KickReason,
 						new DodNet.KickReason("Name already taken!"),
@@ -358,16 +364,17 @@ public class NetworkingTest : MonoBehaviour {
 				}
 				else // New user connected!
 				{
-					Player p = new Player(msg.playerID, msg.name, netMsg.conn);
+					PlayerConnectionTuple p = new PlayerConnectionTuple(msg.playerID, msg.name, netMsg.conn);
 					connectedPlayers.Add(p);
 
 					eventLog.AddTaggedEvent(serverTag, "Player connected: " + printPlayerName(p) + " from " + netMsg.conn.address, true);
 
 					ServerSendMessage(DodNet.MsgId.PlayerCon,
-						new DodNet.PlayerCon(p), DodChannels.reliable, connectedPlayers); // Inform everyone of the new player
+						new DodNet.PlayerCon(p.player), DodChannels.reliable, connectedPlayers); // Inform everyone of the new player
 
 					ServerSendMessage(DodNet.MsgId.PlayerList,
-						new DodNet.PlayerList(connectedPlayers), DodChannels.reliable, netMsg.conn); // Let the new player know the current state of the server
+						new DodNet.PlayerList(getAllDodPlayers(connectedPlayers)), 
+						DodChannels.reliable, netMsg.conn); // Let the new player know the current state of the server
 				}
 			}
 			break;
@@ -388,12 +395,12 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.NameChange:
 			{
 				DodNet.NameChange msg = netMsg.ReadMessage<DodNet.NameChange>();
-				Player p;
-				if ( existPlayerByID(connectedPlayers, msg.playerID, out p) )
+				PlayerConnectionTuple p;
+				if ( Dod.existPlayerByID(connectedPlayers, msg.playerID, out p) )
 				{
-					if ( existPlayerByName(connectedPlayers, msg.name ) ) // Name is already occupied
+					if ( Dod.existPlayerByName(connectedPlayers, msg.name ) ) // Name is already occupied
 					{
-						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.playerID, msg.name, true), DodChannels.reliable, p.connection);
+						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.player.playerID, msg.name, true), DodChannels.reliable, p.connection);
 						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s  name change failed, to: " + msg.name, true);
 					}
 					else // Acknowledge the name change
@@ -402,7 +409,7 @@ public class NetworkingTest : MonoBehaviour {
 						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.name, true);
 					}
 
-					p.name = msg.name;
+					p.player.name = msg.name;
 				}
 			}
 			break;
@@ -422,7 +429,7 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.PlayerList:
 			{
 				DodNet.PlayerList msg = netMsg.ReadMessage<DodNet.PlayerList>();
-				allPlayersClient = msg.list;
+//				allPlayersClient = msg.list;
 			}
 			break;
 
@@ -458,8 +465,8 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.ConsoleBroadcast:
 			{
 				DodNet.ConsoleBroadcast msg = netMsg.ReadMessage<DodNet.ConsoleBroadcast>();
-				Player p;
-				if ( existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				DodPlayer p;
+				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					eventLog.AddTaggedEvent(chatTag, p.name +  ": " + msg.broadcast, true);
 				}
@@ -473,8 +480,8 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.NameChange:
 			{
 				DodNet.NameChange msg = netMsg.ReadMessage<DodNet.NameChange>();
-				Player p;
-				if ( existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				DodPlayer p;
+				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					if( msg.playerID == myID ) // Its me, check if it failed or not
 					{
@@ -500,8 +507,8 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.PlayerCon:
 			{
 				DodNet.PlayerCon msg = netMsg.ReadMessage<DodNet.PlayerCon>();
-				Player p;
-				allPlayersClient.Add(p = new Player(msg.playerID, msg.name, null));
+				DodPlayer p;
+				allPlayersClient.Add(p = new DodPlayer(msg.playerID, msg.name));
 				if(msg.playerID != myID)
 				{
 					eventLog.AddTaggedEvent(noTag, "Player connected: " + printPlayerName(p), true);
@@ -516,8 +523,8 @@ public class NetworkingTest : MonoBehaviour {
 		case (short)DodNet.MsgId.PlayerDisc:
 			{
 				DodNet.PlayerDisc msg = netMsg.ReadMessage<DodNet.PlayerDisc>();
-				Player p;
-				if ( existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				DodPlayer p;
+				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " disconnected. Reason: " + msg.reason, true);
 					allPlayersClient.Remove(p);
@@ -547,13 +554,23 @@ public class NetworkingTest : MonoBehaviour {
 			nc.RegisterHandler((short)MsgId, nmd);
 	}
 
+	List<DodPlayer> getAllDodPlayers(List<PlayerConnectionTuple> L)
+	{
+		List<DodPlayer> newList = new List<DodPlayer>();
+		foreach(PlayerConnectionTuple pct in connectedPlayers)
+		{
+			newList.Add(pct.player);
+		}
+		return newList;
+	}
+
 	byte giveUniquePlayerID()
 	{
 		byte newID;
 		do
 		{
 			newID = (byte)UnityEngine.Random.Range(PlayerIdsLowerBound, PlayerIdsUpperBound);
-		} while ( existPlayerByID( connectedPlayers, newID ) );
+		} while ( Dod.existPlayerByID( connectedPlayers, newID ) );
 		return newID;
 	}
 
@@ -567,10 +584,15 @@ public class NetworkingTest : MonoBehaviour {
 		// return null;
 	}
 
-	string printPlayerName(Player p)
+	string printPlayerName(DodPlayer p)
 	{
 		if(isServer) return p.name + "(" + p.playerID + ")";
 		return p.name;
+	}
+	string printPlayerName(PlayerConnectionTuple p)
+	{
+		if(isServer) return p.player.name + "(" + p.player.playerID + ")";
+		return p.player.name;
 	}
 
 	string printServerAdress ()
@@ -603,84 +625,9 @@ public class NetworkingTest : MonoBehaviour {
 		return ( isConnected() && isAuthenticated() );
 	}
 
-	public bool existPlayerByID (List<Player> L, byte query, out Player player)
-	{
-		Predicate<Player> pr = p => p.playerID == query;
-
-		int i = L.FindIndex(pr);
-		if (i == -1) {
-			player = null;
-			return false;
-		}
-		player = L.Find(pr);
-		return true;
-	}
-	public bool existPlayerByID (List<Player> L, byte query)
-	{
-		Player p = new Player();
-		return existPlayerByID(L, query, out p);
-	}
-
-	public bool existPlayerByName (List<Player> L, string query, out Player player)
-	{
-		Predicate<Player> pr = p => p.name == query;
-
-		int i = L.FindIndex(pr);
-		if (i == -1) {
-			player = null;
-			return false;
-		}
-		player = L.Find(pr);
-		return true;
-	}
-	public bool existPlayerByName (List<Player> L, string query)
-	{
-		Player p = new Player();
-		return existPlayerByName(L, query, out p);
-	}
-
-	public bool existPlayerByConnection (List<Player> L, NetworkConnection query, out Player player)
-	{
-		Predicate<Player> pr = p => p.connection == query;
-
-		int i = L.FindIndex(pr);
-		if (i == -1) {
-			player = null;
-			return false;
-		}
-		player = L.Find(pr);
-		return true;
-	}
-	public bool existPlayerByConnection (List<Player> L, NetworkConnection query)
-	{
-		Player p = new Player();
-		return existPlayerByConnection(L, query, out p);
-	}
-
-
 	// ===========================================================================
 	// ========================= UTILITY CLASSES =========================
 	// ===========================================================================
-
-	class DodChannels
-	{
-		static public byte priority; // For important, reliable one shot events
-		static public byte reliable; // For important events, such as player action
-		static public byte unreliable; // For slow events, such as camera stream
-		static public byte fragmented; // For large events, such as file transfer
-		static public byte update; // For spammed events, such as object movement
-	}
-
-	public class Player
-	{
-		public Player() {}
-		public Player(byte id, string Name, NetworkConnection conn) { playerID = id; name = Name; connection = conn; }
-
-		public byte playerID;
-		public string name;
-		public NetworkConnection connection;
-		public string dcReason = "Connection closed";
-	}
 
 	class DodNet
 	{
@@ -734,7 +681,7 @@ public class NetworkingTest : MonoBehaviour {
 		public class PlayerCon : MessageBase
 		{
 			public PlayerCon() {}
-			public PlayerCon(Player p) { playerID = p.playerID; name = p.name; }
+			public PlayerCon(DodPlayer p) { playerID = p.playerID; name = p.name; }
 
 			public byte playerID;
 			public string name;
@@ -752,9 +699,9 @@ public class NetworkingTest : MonoBehaviour {
 		public class PlayerList : MessageBase
 		{
 			public PlayerList() {}
-			public PlayerList(List<Player> List) { list = List; }
+			public PlayerList(List<DodPlayer> List) { list = List; }
 
-			public List<Player> list;
+			public List<DodPlayer> list;
 		}
 	}
 }
