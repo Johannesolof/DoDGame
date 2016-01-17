@@ -39,7 +39,7 @@ public class NetworkingTest : MonoBehaviour {
 
 	Dictionary<string, DateTime> whiteList;
 	Queue<NetworkConnection> pendingConnections;
-	Queue<Action<Delegate>> nextUpdateAction;
+//	Queue<Action<Delegate>> nextUpdateAction;
 
 	TimeSpan whiteListTimeOut = new TimeSpan(6,0,0); // 6 hours for the whitelist to time out
 
@@ -59,7 +59,7 @@ public class NetworkingTest : MonoBehaviour {
 		allPlayersClient = new List<DodPlayer>();
 		whiteList = new Dictionary<string, DateTime>();
 		pendingConnections = new Queue<NetworkConnection>();
-		nextUpdateAction = new Queue<Action<Delegate>>();
+//		nextUpdateAction = new Queue<Action<Delegate>>();
 
 		config = new ConnectionConfig();
 		DodChannels.priority = config.AddChannel(QosType.AllCostDelivery);
@@ -401,7 +401,7 @@ public class NetworkingTest : MonoBehaviour {
 					if ( Dod.existPlayerByName(connectedPlayers, msg.name ) ) // Name is already occupied
 					{
 						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.player.playerID, msg.name, true), DodChannels.reliable, p.connection);
-						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s  name change failed, to: " + msg.name, true);
+						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s name change failed, to: " + msg.name, true);
 					}
 					else // Acknowledge the name change
 					{
@@ -491,14 +491,17 @@ public class NetworkingTest : MonoBehaviour {
 						else
 						{
 							eventLog.AddTaggedEvent(noTag, "Your new name is " + msg.name, true);
+							p.name = msg.name;
 						}
 					}
 					else // Someone else changed their name
 					{
-						eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " is now known as " + msg.name, true);
+						if ( !msg.failed )
+						{
+							eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " is now known as " + msg.name, true);
+							p.name = msg.name;
+						}
 					}
-
-					p.name = msg.name;
 				}
 			}
 			break;
