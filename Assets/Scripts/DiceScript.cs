@@ -5,12 +5,15 @@ using System.Linq;
 
 public class DiceScript : MonoBehaviour
 {
+    private Quaternion[] rotaions = new []{new Quaternion(0,0,0,0), };
+
+
     private Renderer _renderer;
     private Rigidbody _rigidbody;
     private Transform _transform;
 
 
-    public int Sides;
+    public Normal[] Normals;
 
 	// Use this for initialization
     private void Start()
@@ -21,7 +24,10 @@ public class DiceScript : MonoBehaviour
         SetFadeColors();
     }
 
+    void CalculateNormals(int sides)
+    {
 
+    }
 
 
     private bool _fadeInDone;
@@ -50,8 +56,26 @@ public class DiceScript : MonoBehaviour
 
 	    if (_rigidbody.velocity.magnitude < 0.1)
 	    {
-	        ;
+	        switch (UpSide())
+	        {
+                case 0:
+                    break;
+                default:
+                    break;
+	        }
+	        
 	    }
 
 	}
+
+    int UpSide()
+    {
+        return 0;
+    }
+}
+
+public class Normal
+{
+    public int Value { get; set; }
+    public Vector3 Direction { get; set; }
 }
