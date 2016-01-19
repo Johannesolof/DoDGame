@@ -26,7 +26,7 @@ public class SpawnDice : MonoBehaviour
             RaycastHit hit;
             Physics.Raycast(ray, out hit);
 
-            var ins = (GameObject)Instantiate(Dice[Random.Range(0, Dice.Length)], ray.origin + ray.direction * 2, Quaternion.identity);
+			var ins = (GameObject)Instantiate(Dice[Random.Range(0, Dice.Length)], ray.origin + ray.direction * 2, Random.rotationUniform);
             var rg = ins.GetComponent<Rigidbody>();
             rg.velocity = ray.direction * 12;
             const float rotValue = 5f;
