@@ -39,7 +39,6 @@ public class NetworkingTest : MonoBehaviour {
 
 	Dictionary<string, DateTime> whiteList;
 	Queue<NetworkConnection> pendingConnections;
-//	Queue<Action<Delegate>> nextUpdateAction;
 
 	TimeSpan whiteListTimeOut = new TimeSpan(6,0,0); // 6 hours for the whitelist to time out
 
@@ -59,7 +58,6 @@ public class NetworkingTest : MonoBehaviour {
 		allPlayersClient = new List<DodPlayer>();
 		whiteList = new Dictionary<string, DateTime>();
 		pendingConnections = new Queue<NetworkConnection>();
-//		nextUpdateAction = new Queue<Action<Delegate>>();
 
 		config = new ConnectionConfig();
 		DodChannels.priority = config.AddChannel(QosType.AllCostDelivery);
@@ -398,18 +396,18 @@ public class NetworkingTest : MonoBehaviour {
 				PlayerConnectionTuple p;
 				if ( Dod.existPlayerByID(connectedPlayers, msg.playerID, out p) )
 				{
-					if ( Dod.existPlayerByName(connectedPlayers, msg.name ) ) // Name is already occupied
+					if ( Dod.existPlayerByName(connectedPlayers, msg.newName ) ) // Name is already occupied
 					{
-						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.player.playerID, msg.name, true), DodChannels.reliable, p.connection);
-						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s name change failed, to: " + msg.name, true);
+						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.player.playerID, msg.newName, true), DodChannels.reliable, p.connection);
+						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s name change failed, to: " + msg.newName, true);
 					}
 					else // Acknowledge the name change
 					{
 						ServerSendMessage(DodNet.MsgId.NameChange, msg, DodChannels.reliable, connectedPlayers);
-						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.name, true);
+						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.newName, true);
 					}
 
-					p.player.name = msg.name;
+					p.player.name = msg.newName;
 				}
 			}
 			break;
@@ -428,6 +426,7 @@ public class NetworkingTest : MonoBehaviour {
 
 		case (short)DodNet.MsgId.PlayerList:
 			{
+				// TODO: See this as a request for the player list ?
 				eventLog.AddTaggedEvent(serverTag, "PlayerList received: " + netMsg.msgType, true);
 			}
 			break;
@@ -486,20 +485,20 @@ public class NetworkingTest : MonoBehaviour {
 					{
 						if ( msg.failed ) // Was not successful
 						{
-							eventLog.AddTaggedEvent(noTag, "Name change failed. " + msg.name + " is already occupied.", true);
+							eventLog.AddTaggedEvent(noTag, "Name change failed. " + msg.newName + " is already occupied.", true);
 						}
 						else
 						{
-							eventLog.AddTaggedEvent(noTag, "Your new name is " + msg.name, true);
-							p.name = msg.name;
+							eventLog.AddTaggedEvent(noTag, "Your new name is " + msg.newName, true);
+							p.name = msg.newName;
 						}
 					}
 					else // Someone else changed their name
 					{
 						if ( !msg.failed )
 						{
-							eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " is now known as " + msg.name, true);
-							p.name = msg.name;
+							eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " is now known as " + msg.newName, true);
+							p.name = msg.newName;
 						}
 					}
 				}
@@ -575,6 +574,7 @@ public class NetworkingTest : MonoBehaviour {
 
 	byte giveUniquePlayerID()
 	{
+		// TODO: Maybe not having this being random?
 		byte newID;
 		do
 		{
@@ -653,6 +653,12 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class UserLogin : MessageBase
 		{
+			// From Server to Client:
+			//  • Second-to-last part of handshake; Tell the user what his PlayerID is
+			//  • 
+			// From Client to Server:
+			//  • Last part of handshake; Tell server what the user's name is
+			//  • 
 			public UserLogin() {}
 			public UserLogin(byte id, string Name) { playerID = id; name = Name; }
 
@@ -662,6 +668,12 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class KickReason : MessageBase
 		{
+			// From Server to Client:
+			//  • Kick a user and tell them the reason
+			//  • 
+			// From Client to Server:
+			//  • N/A
+			//  • 
 			public KickReason() {}
 			public KickReason(string Reason) { reason = Reason; }
 
@@ -670,6 +682,13 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class ConsoleBroadcast : MessageBase
 		{
+			// From Server to Client:
+			//  • Relaying chat messages
+			//  • Broadcasting any useful information to users' consoles
+			//  •
+			// From Client to Server:
+			//  • Chat messages
+			//  • 
 			public ConsoleBroadcast() {}
 			public ConsoleBroadcast(byte id, string bc) { playerID = id; broadcast = bc; }
 
@@ -679,16 +698,29 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class NameChange : MessageBase
 		{
+			// From Server to Client:
+			//  • Tell the user that the name change failed, since the name is already occupied
+			//  • Tell the receiver that this user has changed his name
+			//  • 
+			// From Client to Server:
+			//  • Inform the server that the user wants to change his name
+			//  • 
 			public NameChange() {}
-			public NameChange(byte id, string Name, bool Failed = false) { playerID = id; name = Name; failed = Failed; }
+			public NameChange(byte id, string Name, bool Failed = false) { playerID = id; newName = Name; failed = Failed; }
 
 			public byte playerID;
-			public string name;
+			public string newName;
 			public bool failed;
 		}
 
 		public class PlayerCon : MessageBase
 		{
+			// From Server to Client:
+			//  • Tell the receiver that this user has connected
+			//  • 
+			// From Client to Server:
+			//  • N/A
+			//  • 
 			public PlayerCon() {}
 			public PlayerCon(DodPlayer p) { playerID = p.playerID; name = p.name; }
 
@@ -698,6 +730,12 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class PlayerDisc : MessageBase
 		{
+			// From Server to Client:
+			//  • Tell the receiver that this user has disconnected
+			//  • 
+			// From Client to Server:
+			//  • N/A
+			//  • 
 			public PlayerDisc() {}
 			public PlayerDisc(byte id, string Reason) { playerID = id; reason = Reason; }
 
@@ -707,6 +745,13 @@ public class NetworkingTest : MonoBehaviour {
 
 		public class PlayerList : MessageBase
 		{
+			// From Server to Client:
+			//  • Relay the list of currently connected users to the receiver
+			//  • 
+			// From Client to Server:
+			//  • N/A
+			//  • TODO: Request the list of currently connected users ?
+			//  • 
 			public PlayerList() {}
 			public PlayerList(List<DodPlayer> List) { array = List.ToArray(); }
 
