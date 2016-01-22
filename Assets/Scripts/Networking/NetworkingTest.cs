@@ -41,6 +41,9 @@ public class NetworkingTest : MonoBehaviour {
 	Queue<NetworkConnection> pendingConnections;
 
 	TimeSpan whiteListTimeOut = new TimeSpan(6,0,0); // 6 hours for the whitelist to time out
+	float lastHeartBeat = 0f; // Last time stamp, for heartbeat checks, in seconds since game start
+	float heartBeatTimeOut = 2f; // 2 seconds time out
+
 
 	bool isAtStartup = true;
 
@@ -98,21 +101,21 @@ public class NetworkingTest : MonoBehaviour {
 					DodChannels.reliable);
 			}
 
-//			if (Input.GetKeyDown(KeyCode.D))
-//			{
-//				if ( myClient != null && myClient.isConnected )
-//				{
-//					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
-//					myClient.Disconnect();
-//					myClient.Shutdown();
-//					myClient = null;
+			if (Input.GetKeyDown(KeyCode.D))
+			{
+				if ( myClient != null && myClient.isConnected )
+				{
+					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
+					myClient.Disconnect();
+					myClient.Shutdown();
+					myClient = null;
 //					NetworkServer.DisconnectAll();
 //					foreach( NetworkConnection c in NetworkServer.connections )
 //					{
 //						c.Disconnect();
 //					}
-//				}
-//			}
+				}
+			}
 
 			// TODO: Move this stuff to a more appropriate place and handle in a more delicate fashion
 			if(isServer && pendingConnections.Count > 0)
@@ -121,6 +124,8 @@ public class NetworkingTest : MonoBehaviour {
 				OnClientAccept(nc);
 			}
 		}
+
+		doHeartBeatChecks();
 	}
 
 	void OnGUI()
@@ -431,6 +436,12 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
+		case (short)DodNet.MsgId.HeartBeat:
+			{
+				// Do nothing, since this is not interresting for us
+			}
+			break;
+
 		default:
 			eventLog.AddTaggedEvent(serverTag, "Unknown message id received: " + netMsg.msgType, true);
 			break;
@@ -540,6 +551,12 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
+		case (short)DodNet.MsgId.HeartBeat:
+			{
+				// Do nothing, since this is not interresting for us
+			}
+			break;
+
 		default:
 			eventLog.AddTaggedEvent(clientTag, "Unknown message id received: " + netMsg.msgType, true);
 			break;
@@ -591,6 +608,29 @@ public class NetworkingTest : MonoBehaviour {
 			new DodNet.UserLogin(newID, ""),
 			DodChannels.reliable, nc);
 		// return null;
+	}
+
+	void doHeartBeatChecks()
+	{
+		if( Time.time > lastHeartBeat + heartBeatTimeOut )
+		{
+			lastHeartBeat = Time.time;
+			if( isServer )
+			{
+				if(NetworkServer.active)
+				{
+					ServerSendMessage(DodNet.MsgId.HeartBeat, new DodNet.HeartBeat(), DodChannels.update, connectedPlayers);
+				}
+			}
+			else
+			{
+				if(isConnected())
+				{
+					ClientSendMessage(DodNet.MsgId.HeartBeat,
+						new DodNet.HeartBeat(), DodChannels.update);
+				}
+			}
+		}
 	}
 
 	string printPlayerName(DodPlayer p)
@@ -649,6 +689,7 @@ public class NetworkingTest : MonoBehaviour {
 			PlayerCon,
 			PlayerDisc,
 			PlayerList,
+			HeartBeat,
 		}
 
 		public class UserLogin : MessageBase
@@ -767,6 +808,17 @@ public class NetworkingTest : MonoBehaviour {
 				}
 				return L;
 			}
+		}
+
+		public class HeartBeat : MessageBase
+		{
+			// From Server to Client:
+			//  • Probe the connection (Right now, these message are not handled at the receiver)
+			//  • 
+			// From Client to Server:
+			//  • Probe the connection (Right now, these message are not handled at the receiver)
+			//  • 
+			public HeartBeat() {}
 		}
 	}
 }
