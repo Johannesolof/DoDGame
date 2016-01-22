@@ -26,8 +26,9 @@ public class LookAt : MonoBehaviour
     private float _defaultFov;
     private float _zoomFov;
     public float Duration = 1f;
-    private RaycastHit _prevHit;
-    private Vector3 _delta;
+    private Vector3 _prevPoint;
+    private RaycastHit _hit;
+    private bool _isHit;
 
     // Use this for initialization
     void Start()
@@ -41,14 +42,17 @@ public class LookAt : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        switch (_zoom)
+        Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        _isHit = Physics.Raycast(ray, out hit, 100);
+
+
+            switch (_zoom)
         {
             case Zooming.NotZoomed:
                 if (Input.GetMouseButtonDown(0))
                 {
-                    Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
-                    RaycastHit hit;
-                    if (Physics.Raycast(ray, out hit, 100) && hit.transform.tag == "Zoomable")
+                    if (_isHit && hit.transform.tag == "Zoomable")
                     {
                         GameObject temp = new GameObject();
                         //var tf = gameObject.AddComponent<Transform>();
@@ -91,43 +95,15 @@ public class LookAt : MonoBehaviour
             case Zooming.Zoomed:
                 if (Input.GetMouseButton(0))
                 {
-                    Ray ray1 = _camera.ScreenPointToRay(Input.mousePosition);
-                    RaycastHit hit1;
-                    if (Physics.Raycast(ray1, out hit1, 100) && hit1.transform.tag == "Zoomable") //TODO: Fulkod som funkar dåligt
+                    if (_isHit && hit.transform.tag == "Zoomable")
                     {
                         if (Input.GetMouseButtonDown(0))
                         {
-                            _offset = transform.position - hit1.point;
-                            _prevHit = hit1;
-                            _delta = Vector3.zero;
+                            _offset = transform.position - hit.point;
+                            _prevPoint = hit.point;
                         }
-
-                        var delta = _prevHit.point - hit1.point;
-                        
-
-                        if (delta != Vector3.zero)
-                            Debug.Log(String.Format("{0:F3}, {1:F3}, {2:F3}", delta.x, delta.y, delta.z));
-                        _prevHit = hit1;
-                        //transform.position = new Vector3(temp.x, transform.position.y, temp.z);
-
-                        if ((delta.normalized-_delta.normalized).magnitude < 1)
-                        transform.position += delta*2;
-
-                        _delta = delta;
-
-
-                        //if (Input.GetMouseButtonDown(0))
-                        //{
-                        //    _screenPoint = _camera.WorldToScreenPoint(hit1.transform.position);
-
-                        //    _offset = hit1.transform.position - _camera.ScreenToWorldPoint(new Vector3(Screen.width - Input.mousePosition.x, Screen.height - Input.mousePosition.y, _screenPoint.z));
-                        //}
-
-                        //Vector3 curScreenPoint = new Vector3(Screen.width - Input.mousePosition.x, Screen.height - Input.mousePosition.y, _screenPoint.z);
-
-                        //Vector3 curPosition = _camera.ScreenToWorldPoint(curScreenPoint) + _offset;
-                        ////hit1.transform.position = curPosition;
-                        //transform.position = new Vector3(curPosition.x, _camera.transform.position.y, curPosition.z);
+                        Vector3 delta = _prevPoint - hit.point;
+                        _camera.transform.position += new Vector3(delta.x, 0, delta.z);
                     }
                     break;
                 }
@@ -149,6 +125,12 @@ public class LookAt : MonoBehaviour
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
+        }
+
+        ray = _camera.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out hit, 100))
+        {
+            _prevPoint = hit.point;
         }
     }
 }
