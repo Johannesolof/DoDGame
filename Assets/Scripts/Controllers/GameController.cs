@@ -8,18 +8,36 @@ using System.Collections;
 // This way, we can easily keep important things between all scenes.
 public class GameController : MonoBehaviour {
 
+	static private GameController _instance;
+	static public GameController Instance {
+		get
+		{
+			if(_instance == null)
+			{
+				var go = GameObject.FindWithTag("GameController");
+				_instance = go.GetComponent<GameController>();
+			}
+			return _instance;
+		}
+		private set{_instance = Instance;}
+	}
+
 	public Canvas mainCanvas;
 	public Canvas hostCanvas;
 	public Canvas joinCanvas;
 
+	// For networking
+	public string playerName = "";
+	public int port = -1;
+	public string adress = "";
+	public bool isServer = false;
+
+	public const int defaultPort = 47624;
+
+
 	Scene currentScene;
 	Canvas currentCanvas;
 
-	// For networking
-	string playerName = "";
-	int port = 0;
-	string adress = "";
-	bool isServer = false;
 
 	void Awake ()
 	{
@@ -39,11 +57,6 @@ public class GameController : MonoBehaviour {
 			Debug.Log("Unknown scene: " + currentScene.name);
 			break;
 		}
-	}
-
-	void Update () 
-	{
-		
 	}
 
 	public void displayMainMenu()
@@ -72,6 +85,7 @@ public class GameController : MonoBehaviour {
 		if(playerName != "")
 		{
 			isServer = true;
+			if(port == -1) port = defaultPort;
 			SceneManager.LoadScene("NetScene");
 		}
 	}
@@ -80,6 +94,7 @@ public class GameController : MonoBehaviour {
 	{
 		if(playerName != "" && adress != "")
 		{
+			if(port == -1) port = defaultPort;
 			SceneManager.LoadScene("NetScene");
 		}
 	}
@@ -106,6 +121,5 @@ public class GameController : MonoBehaviour {
 	public void SetPort(string s)
 	{
 		port = int.Parse(s);
-		Debug.Log("Port parsed to: " + port);
 	}
 }

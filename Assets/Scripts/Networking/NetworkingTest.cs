@@ -46,12 +46,22 @@ public class NetworkingTest : MonoBehaviour {
 
 	bool isAtStartup = true;
 
+	GameController gameController;
+
 
 	void Start ()
 	{
+		gameController = GameController.Instance;
+		myName = gameController.playerName;
+		port = gameController.port;
+		adress = gameController.adress;
+		isServer = gameController.isServer;
+
 		eventLog = GetComponent<PlayerLog>();
-		isServer = false;
 		SetupAllVariables();
+
+		if(isServer) SetupServer();
+		SetupClient();
 	}
 
 	void SetupAllVariables()
@@ -93,28 +103,28 @@ public class NetworkingTest : MonoBehaviour {
 				ResetClientAndServerAndRestart();
 				Start();
 			}
-			if (Input.GetKeyDown(KeyCode.N))
-			{
-				ClientSendMessage(DodNet.MsgId.NameChange,
-					new DodNet.NameChange(myID, "JudeJohan"),
-					DodChannels.reliable);
-			}
+//			if (Input.GetKeyDown(KeyCode.N))
+//			{
+//				ClientSendMessage(DodNet.MsgId.NameChange,
+//					new DodNet.NameChange(myID, "JudeJohan"),
+//					DodChannels.reliable);
+//			}
 
-			if (Input.GetKeyDown(KeyCode.D))
-			{
-				if ( myClient != null && myClient.isConnected )
-				{
-					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
-					myClient.Disconnect();
-					myClient.Shutdown();
-					myClient = null;
-//					NetworkServer.DisconnectAll();
-//					foreach( NetworkConnection c in NetworkServer.connections )
-//					{
-//						c.Disconnect();
-//					}
-				}
-			}
+//			if (Input.GetKeyDown(KeyCode.D))
+//			{
+//				if ( myClient != null && myClient.isConnected )
+//				{
+//					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
+//					myClient.Disconnect();
+//					myClient.Shutdown();
+//					myClient = null;
+////					NetworkServer.DisconnectAll();
+////					foreach( NetworkConnection c in NetworkServer.connections )
+////					{
+////						c.Disconnect();
+////					}
+//				}
+//			}
 
 			// TODO: Move this stuff to a more appropriate place and handle in a more delicate fashion
 			if(isServer && pendingConnections.Count > 0)
@@ -157,7 +167,7 @@ public class NetworkingTest : MonoBehaviour {
 		NetworkServer.Configure(hostconfig);
 		NetworkServer.Listen(port);
 		NetworkServer.RegisterHandler(MsgType.Connect, OnClientConnected);
-		isServer = true;
+//		isServer = true;
 		eventLog.AddTaggedEvent(serverTag, "Setup complete", true);
 		adress = localServer;
 	}
