@@ -57,6 +57,8 @@ public class NetworkingTest : MonoBehaviour {
 		adress = gameController.adress;
 		isServer = gameController.isServer;
 
+		Debug.Log("Adress is: " + adress + ":" + port);
+
 		eventLog = GetComponent<PlayerLog>();
 		SetupAllVariables();
 
