@@ -44,11 +44,10 @@ public class NetworkingTest : MonoBehaviour {
 	float lastHeartBeat = 0f; // Last time stamp, for heartbeat checks, in seconds since game start
 	float heartBeatTimeOut = 2f; // 2 seconds time out
 
-
 	bool isAtStartup = true;
 
 
-	void Start () 
+	void Start ()
 	{
 		eventLog = GetComponent<PlayerLog>();
 		isServer = false;
@@ -791,7 +790,8 @@ public class NetworkingTest : MonoBehaviour {
 			//  • 
 			// From Client to Server:
 			//  • N/A
-			//  • TODO: Request the list of currently connected users ?
+			//  • TODO: Request the list of currently connected users ? 
+			//    (This should never be required, since all player list updates are sent when a player connects or disconnects, over the reliable channel)
 			//  • 
 			public PlayerList() {}
 			public PlayerList(List<DodPlayer> List) { array = List.ToArray(); }
