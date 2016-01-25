@@ -9,9 +9,6 @@ using DodNS;
 
 
 public class NetworkingTest : MonoBehaviour {
-	
-	// Public fields
-	public bool isServer { get; protected set; }
 
 	// Private fields
 	const string serverTag = "Server";
@@ -24,13 +21,13 @@ public class NetworkingTest : MonoBehaviour {
 	const byte PlayerIdsLowerBound = 1;
 	const byte PlayerIdsUpperBound = byte.MaxValue/2;
 	byte myID = 0;
-	string myName = "Steve"; // TODO: Make user able to choose their own name..
 	NetworkClient myClient;
 	PlayerLog eventLog;
 	ConnectionConfig config;
 	HostTopology hostconfig;
-	int port = 47624; // TODO: Make user able to choose the port and ip
-	string adress = "213.114.70.247";
+
+	NetworkingInfo networkingInfo;
+
 	const string localServer = "localServer";
 	const string localClient = "localClient";
 
@@ -44,25 +41,19 @@ public class NetworkingTest : MonoBehaviour {
 	float lastHeartBeat = 0f; // Last time stamp, for heartbeat checks, in seconds since game start
 	float heartBeatTimeOut = 2f; // 2 seconds time out
 
-	bool isAtStartup = true;
-
-	GameController gameController;
-
+//	bool isAtStartup = true;
 
 	void Start ()
 	{
-		gameController = GameController.Instance;
-		myName = gameController.playerName;
-		port = gameController.port;
-		adress = gameController.adress;
-		isServer = gameController.isServer;
-
-		Debug.Log("Adress is: " + adress + ":" + port);
+		networkingInfo = GameController.Instance.networkingInfo;
+		if(networkingInfo.port == -1) networkingInfo.port = NetworkingInfo.defaultPort;
+		if(networkingInfo.address == "") networkingInfo.address = NetworkingInfo.defaultAddress;
 
 		eventLog = GetComponent<PlayerLog>();
+
 		SetupAllVariables();
 
-		if(isServer) SetupServer();
+		if(networkingInfo.isServer) SetupServer();
 		SetupClient();
 	}
 
@@ -85,77 +76,55 @@ public class NetworkingTest : MonoBehaviour {
 	void Update () 
 	{
 		// TODO: Move this stuff to a more appropriate place
-		if (isAtStartup)
-		{
-			if (Input.GetKeyDown(KeyCode.C))
-			{
-				SetupClient();
-			}
-
-			if (Input.GetKeyDown(KeyCode.H))
-			{
-				SetupServer();
-				SetupClient();
-			}
-		}
-		else
-		{
-			if (Input.GetKeyDown(KeyCode.T))
-			{
-				ResetClientAndServerAndRestart();
-				Start();
-			}
-//			if (Input.GetKeyDown(KeyCode.N))
+//		if (isAtStartup)
+//		{
+//			if (Input.GetKeyDown(KeyCode.C))
 //			{
-//				ClientSendMessage(DodNet.MsgId.NameChange,
-//					new DodNet.NameChange(myID, "JudeJohan"),
-//					DodChannels.reliable);
+//				SetupClient();
 //			}
-
-//			if (Input.GetKeyDown(KeyCode.D))
+//
+//			if (Input.GetKeyDown(KeyCode.H))
 //			{
-//				if ( myClient != null && myClient.isConnected )
-//				{
-//					eventLog.AddTaggedEvent(serverTag, "Trying to DC.. ", true);
-//					myClient.Disconnect();
-//					myClient.Shutdown();
-//					myClient = null;
-////					NetworkServer.DisconnectAll();
-////					foreach( NetworkConnection c in NetworkServer.connections )
-////					{
-////						c.Disconnect();
-////					}
-//				}
+//				SetupServer();
+//				SetupClient();
 //			}
-
-			// TODO: Move this stuff to a more appropriate place and handle in a more delicate fashion
-			if(isServer && pendingConnections.Count > 0)
-			{
-				NetworkConnection nc = pendingConnections.Dequeue();
-				OnClientAccept(nc);
-			}
+//		}
+//		else
+//		{
+		if (Input.GetKeyDown(KeyCode.Escape))
+		{
+			ResetClientAndServerAndRestart();
+			GameController.Instance.SceneLoader("MenuScene");
 		}
+
+		// TODO: Move this stuff to a more appropriate place and handle in a more delicate fashion
+		if(networkingInfo.isServer && pendingConnections.Count > 0)
+		{
+			NetworkConnection nc = pendingConnections.Dequeue();
+			OnClientAccept(nc);
+		}
+//		}
 
 		doHeartBeatChecks();
 	}
 
 	void OnGUI()
 	{
-		//  TODO: Move this stuff to a more appropriate place
-		if (isAtStartup)
-		{
-			GUI.Label(new Rect(10, 30, 200, 100), "Press H for host");
-			GUI.Label(new Rect(10, 50, 200, 100), "Press C for client");
-			GUI.Label(new Rect(10, 70, 200, 100), "Press Q to toggle console");
-			GUI.Label(new Rect(10, 90, 200, 100), "Press M log sample message");
-		}
-		else
-		{
+//		//  TODO: Move this stuff to a more appropriate place
+//		if (isAtStartup)
+//		{
+//			GUI.Label(new Rect(10, 30, 200, 100), "Press H for host");
+//			GUI.Label(new Rect(10, 50, 200, 100), "Press C for client");
+//			GUI.Label(new Rect(10, 70, 200, 100), "Press Q to toggle console");
+//			GUI.Label(new Rect(10, 90, 200, 100), "Press M log sample message");
+//		}
+//		else
+//		{
 //			GUI.Label(new Rect(10, 30, 200, 100), "Press D to disconnect");
-			GUI.Label(new Rect(10, 50, 200, 100), "Press T to terminate networking");
-			GUI.Label(new Rect(10, 70, 200, 100), "Press Q to toggle console");
-			GUI.Label(new Rect(10, 90, 200, 100), "Press M log sample message");
-		}
+		GUI.Label(new Rect(10, 50, 250, 100), "Press ESC to terminate networking");
+		GUI.Label(new Rect(10, 70, 250, 100), "Press Q to toggle console");
+		GUI.Label(new Rect(10, 90, 250, 100), "Press M log sample message");
+//		}
 	}
 
 
@@ -167,17 +136,16 @@ public class NetworkingTest : MonoBehaviour {
 	void SetupServer()
 	{
 		NetworkServer.Configure(hostconfig);
-		NetworkServer.Listen(port);
+		NetworkServer.Listen(networkingInfo.port);
 		NetworkServer.RegisterHandler(MsgType.Connect, OnClientConnected);
-//		isServer = true;
 		eventLog.AddTaggedEvent(serverTag, "Setup complete", true);
-		adress = localServer;
+		networkingInfo.address = localServer;
 	}
 
 	// Create a client and connect to the server port
 	void SetupClient()
 	{
-		if(isServer)
+		if(networkingInfo.isServer)
 		{
 			myClient = ClientScene.ConnectLocalServer();
 			myClient.Configure(hostconfig);
@@ -192,30 +160,30 @@ public class NetworkingTest : MonoBehaviour {
 			myClient.Configure(hostconfig);
 
 			myClient.RegisterHandler(MsgType.Connect, OnConnected);
+			myClient.RegisterHandler(MsgType.Error, ConnectionError);
 			myClient.RegisterHandler(MsgType.Disconnect, ConnectionFailed);
 			registerAllDodCallbacks(myClient, cbClientHandler);
 
 			eventLog.AddTaggedEvent(clientTag, "Setup complete", true);
 
-			myClient.Connect(adress, port);
+			myClient.Connect(networkingInfo.address, networkingInfo.port);
+			eventLog.AddTaggedEvent(clientTag, "Connecting to " + networkingInfo.address + ":" + networkingInfo.port, true);
 		}
-
-
-		isAtStartup = false;
 	}
 
 	void ResetClientAndServerAndRestart ()
 	{
-		if(isServer)
+		if(networkingInfo.isServer)
 		{
 			NetworkServer.DisconnectAll();
 			NetworkServer.Shutdown();
 			NetworkServer.Reset();
 		}
-		myClient.Shutdown();
-		myClient = null;
-
-		isAtStartup = true;
+		if(myClient != null)
+		{
+			myClient.Shutdown();
+			myClient = null;
+		}
 	}
 
 
@@ -290,9 +258,18 @@ public class NetworkingTest : MonoBehaviour {
 		myClient.UnregisterHandler(MsgType.Disconnect);
 		myClient.RegisterHandler(MsgType.Disconnect, OnDisconnected);
 	}
+	void OnFailedToConnect(NetworkConnectionError error)
+	{
+		eventLog.AddTaggedEvent(clientTag, "Unable to connect to server " + error.ToString(), true);
+	}
+	void ConnectionError(NetworkMessage netMsg)
+	{
+		eventLog.AddTaggedEvent(clientTag, "Unable to connect to server " + networkingInfo.address + ":" + networkingInfo.port + ". Please check the adress and port and try again.", true);
+		ResetClientAndServerAndRestart();
+	}
 	void ConnectionFailed(NetworkMessage netMsg)
 	{
-		eventLog.AddTaggedEvent(clientTag, "Unable to connect to server " + netMsg.conn.address, true);
+		eventLog.AddTaggedEvent(clientTag, "Unable to connect to server, connection timed out: " + netMsg.conn.address + ":" + networkingInfo.port, true);
 		ResetClientAndServerAndRestart();
 	}
 	void OnDisconnected(NetworkMessage netMsg)
@@ -470,7 +447,7 @@ public class NetworkingTest : MonoBehaviour {
 				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
 				myID = msg.playerID;
 				ClientSendMessage(DodNet.MsgId.UserLogin,
-					new DodNet.UserLogin(myID, myName),
+					new DodNet.UserLogin(myID, networkingInfo.playerName),
 					DodChannels.reliable);
 			}
 			break;
@@ -626,7 +603,7 @@ public class NetworkingTest : MonoBehaviour {
 		if( Time.time > lastHeartBeat + heartBeatTimeOut )
 		{
 			lastHeartBeat = Time.time;
-			if( isServer )
+			if( networkingInfo.isServer )
 			{
 				if(NetworkServer.active)
 				{
@@ -635,7 +612,7 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			else
 			{
-				if(isConnected())
+				if(isConnectedAndAuthenticated())
 				{
 					ClientSendMessage(DodNet.MsgId.HeartBeat,
 						new DodNet.HeartBeat(), DodChannels.update);
@@ -646,19 +623,19 @@ public class NetworkingTest : MonoBehaviour {
 
 	string printPlayerName(DodPlayer p)
 	{
-		if(isServer) return p.name + "(" + p.playerID + ")";
+		if(networkingInfo.isServer) return p.name + "(" + p.playerID + ")";
 		return p.name;
 	}
 	string printPlayerName(PlayerConnectionTuple p)
 	{
-		if(isServer) return p.player.name + "(" + p.player.playerID + ")";
+		if(networkingInfo.isServer) return p.player.name + "(" + p.player.playerID + ")";
 		return p.player.name;
 	}
 
 	string printServerAdress ()
 	{
-		if ( adress == localServer) return adress;
-		return adress + ":" + port;
+		if ( networkingInfo.address == localServer) return networkingInfo.address;
+		return networkingInfo.address + ":" + networkingInfo.port;
 	}
 
 
@@ -833,4 +810,15 @@ public class NetworkingTest : MonoBehaviour {
 			public HeartBeat() {}
 		}
 	}
+}
+
+public class NetworkingInfo
+{
+	public string playerName = "";
+	public int port = -1;
+	public string address = "";
+	public bool isServer = false;
+
+	public const int defaultPort = 47624;
+	public const string defaultAddress = "127.0.0.1";
 }
