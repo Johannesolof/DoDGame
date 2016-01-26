@@ -6,20 +6,19 @@ using System.Collections;
 
 // This game controller script is supposed to be staying between all scene changes.
 // This way, we can easily keep important things between all scenes.
-public class GameController : MonoBehaviour {
-
+public class GameController 
+{
 	static private GameController _instance;
 	static public GameController Instance {
-		get
-		{
-			if(_instance == null)
-			{
-				var go = GameObject.FindWithTag("GameController");
-				if(go != null) _instance = go.GetComponent<GameController>();
+		get {
+			if (_instance == null) {
+				_instance = new GameController ();
 			}
 			return _instance;
 		}
-		private set{_instance = Instance;}
+		private set {
+
+		}
 	}
 
 	public NetworkingInfo networkingInfo = new NetworkingInfo();
@@ -27,11 +26,6 @@ public class GameController : MonoBehaviour {
 	public void resetNetworking ()
 	{
 		networkingInfo = new NetworkingInfo();
-	}
-
-	void Awake ()
-	{
-		DontDestroyOnLoad(this);
 	}
 
 	public void quitGame()
