@@ -8,6 +8,8 @@ using System.Collections;
 // This way, we can easily keep important things between all scenes.
 public class GameController 
 {
+	// Singleton pattern. It is thread safe and the user can always assume that the object exist.
+	// It will also not be instantiated until first use, i.e. it "hold" default values
 	static private GameController _instance;
 	static public GameController Instance {
 		get {
@@ -21,13 +23,12 @@ public class GameController
 		}
 	}
 
-	public NetworkingInfo networkingInfo = new NetworkingInfo();
+	// "GLOBALS"
+	// Some shared data between scenes, for networking
+	public RPC.NetworkingInfo networkingInfo = new RPC.NetworkingInfo();
 
-	public void resetNetworking ()
-	{
-		networkingInfo = new NetworkingInfo();
-	}
-
+	// PUBLIC FUNCTIONS
+	// These can be used from wherever in the codebase
 	public void quitGame()
 	{
 		#if UNITY_EDITOR || UNITY_EDITOR_64
@@ -41,6 +42,7 @@ public class GameController
 	{
 		switch(scene)
 		{
+		// Acknowledge the scene, and maybe do some special treatment?
 		case "MenuScene":
 			SceneManager.LoadScene(scene);
 			break;

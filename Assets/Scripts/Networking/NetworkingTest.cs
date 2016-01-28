@@ -5,8 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 
-using DodNS;
-
+using RPC;
 
 public class NetworkingTest : MonoBehaviour {
 
@@ -26,13 +25,14 @@ public class NetworkingTest : MonoBehaviour {
 	ConnectionConfig config;
 	HostTopology hostconfig;
 
-	NetworkingInfo networkingInfo;
+	RPC.NetworkingInfo networkingInfo;
+	RPC.NetworkingCommon common;
 
 	const string localServer = "localServer";
 	const string localClient = "localClient";
 
-	List<PlayerConnectionTuple> connectedPlayers;
-	List<DodPlayer> allPlayersClient;
+	List<ServerPlayer> connectedPlayers;
+	List<Player> allPlayersClient;
 
 	Dictionary<string, DateTime> whiteList;
 	Queue<NetworkConnection> pendingConnections;
@@ -46,8 +46,10 @@ public class NetworkingTest : MonoBehaviour {
 	void Start ()
 	{
 		networkingInfo = GameController.Instance.networkingInfo;
-		if(networkingInfo.port == -1) networkingInfo.port = NetworkingInfo.defaultPort;
-		if(networkingInfo.address == "") networkingInfo.address = NetworkingInfo.defaultAddress;
+		if(networkingInfo.port == -1) networkingInfo.port = RPC.NetworkingInfo.defaultPort;
+		if(networkingInfo.address == "") networkingInfo.address = RPC.NetworkingInfo.defaultAddress;
+
+		common = NetworkingCommon.Instance;
 
 		eventLog = GetComponent<PlayerLog>();
 
@@ -59,17 +61,17 @@ public class NetworkingTest : MonoBehaviour {
 
 	void SetupAllVariables()
 	{
-		connectedPlayers = new List<PlayerConnectionTuple>();
-		allPlayersClient = new List<DodPlayer>();
+		connectedPlayers = new List<ServerPlayer>();
+		allPlayersClient = new List<Player>();
 		whiteList = new Dictionary<string, DateTime>();
 		pendingConnections = new Queue<NetworkConnection>();
 
 		config = new ConnectionConfig();
-		DodChannels.priority = config.AddChannel(QosType.AllCostDelivery);
-		DodChannels.reliable = config.AddChannel(QosType.ReliableSequenced);
-		DodChannels.unreliable = config.AddChannel(QosType.UnreliableSequenced);
-		DodChannels.fragmented = config.AddChannel(QosType.ReliableFragmented);
-		DodChannels.update = config.AddChannel(QosType.StateUpdate);
+		RPC.Channels.priority = config.AddChannel(QosType.AllCostDelivery);
+		RPC.Channels.reliable = config.AddChannel(QosType.ReliableSequenced);
+		RPC.Channels.unreliable = config.AddChannel(QosType.UnreliableSequenced);
+		RPC.Channels.fragmented = config.AddChannel(QosType.ReliableFragmented);
+		RPC.Channels.update = config.AddChannel(QosType.StateUpdate);
 		hostconfig = new HostTopology(config, maxConcurrentConnectedUsers);
 	}
 
@@ -241,14 +243,14 @@ public class NetworkingTest : MonoBehaviour {
 	void OnClientDisconnected(NetworkMessage netMsg)
 	{
 		eventLog.AddTaggedEvent(serverTag, "Peer disconnected: " + netMsg.conn.address, true);
-		PlayerConnectionTuple p;
-		if ( Dod.existPlayerByConnection(connectedPlayers, netMsg.conn, out p) )
+		ServerPlayer sp;
+		if ( common.existPlayerByConnection(connectedPlayers, netMsg.conn, out sp) )
 		{
-			connectedPlayers.Remove( p );
+			connectedPlayers.Remove( sp );
 
-			ServerSendMessage(DodNet.MsgId.PlayerDisc,
-				new DodNet.PlayerDisc(p.player.playerID, p.player.dcReason),
-				DodChannels.reliable, connectedPlayers);
+			ServerSendMessage(RPC.Message.ID.PlayerDisc,
+				new RPC.Message.PlayerDisc(sp.id, sp.dcReason),
+				RPC.Channels.reliable, connectedPlayers);
 		}
 	}
 
@@ -283,7 +285,7 @@ public class NetworkingTest : MonoBehaviour {
 	// ========================= SEND FUNCTIONS =========================
 	// ===========================================================================
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, NetworkConnection conn)
+	void ServerSendMessage(RPC.Message.ID id, MessageBase msg, byte channel, NetworkConnection conn)
 	{
 		if(conn != null)
 			conn.SendByChannel((short)id, msg, channel);
@@ -291,7 +293,7 @@ public class NetworkingTest : MonoBehaviour {
 			eventLog.AddTaggedEvent(serverTag, "Is not connected to client " + conn.address, true);
 	}
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, List<NetworkConnection> playerConnectionList)
+	void ServerSendMessage(RPC.Message.ID id, MessageBase msg, byte channel, List<NetworkConnection> playerConnectionList)
 	{
 		foreach(NetworkConnection nc in playerConnectionList)
 		{
@@ -299,7 +301,7 @@ public class NetworkingTest : MonoBehaviour {
 		}
 	}
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, PlayerConnectionTuple player)
+	void ServerSendMessage(RPC.Message.ID id, MessageBase msg, byte channel, ServerPlayer player)
 	{
 		if(player.connection.isConnected)
 			player.connection.SendByChannel((short)id, msg, channel);
@@ -307,16 +309,16 @@ public class NetworkingTest : MonoBehaviour {
 			eventLog.AddTaggedEvent(serverTag, "Player is not connected on client " + player.connection.address, true);
 	}
 
-	void ServerSendMessage(DodNet.MsgId id, MessageBase msg, byte channel, List<PlayerConnectionTuple> players)
+	void ServerSendMessage(RPC.Message.ID id, MessageBase msg, byte channel, List<ServerPlayer> players)
 	{
-		foreach(PlayerConnectionTuple p in players)
+		foreach(ServerPlayer p in players)
 		{
 			p.connection.SendByChannel((short)id, msg, channel);
 		}
 	}
 
 
-	void ClientSendMessage(DodNet.MsgId id, MessageBase msg, byte channel)
+	void ClientSendMessage(RPC.Message.ID id, MessageBase msg, byte channel)
 	{
 		if(isConnectedAndAuthenticated())
 			myClient.connection.SendByChannel((short)id, msg, channel);
@@ -343,88 +345,88 @@ public class NetworkingTest : MonoBehaviour {
 
 		switch(netMsg.msgType)
 		{
-		case (short)DodNet.MsgId.UserLogin:  // Last part of user connecting to the server. Check if name is free
+		case (short)RPC.Message.ID.UserLogin:  // Last part of user connecting to the server. Check if name is free
 			{
-				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
-				if ( Dod.existPlayerByName(connectedPlayers, msg.name) )
+				RPC.Message.UserLogin msg = netMsg.ReadMessage<RPC.Message.UserLogin>();
+				if ( common.existPlayerByName(connectedPlayers, msg.name) )
 				{
-					ServerSendMessage(DodNet.MsgId.KickReason,
-						new DodNet.KickReason("Name already taken!"),
-						DodChannels.reliable, netMsg.conn);
+					ServerSendMessage(RPC.Message.ID.KickReason,
+						new RPC.Message.KickReason("Name already taken!"),
+						RPC.Channels.reliable, netMsg.conn);
 					netMsg.conn.Disconnect();
 				}
 				else // New user connected!
 				{
-					PlayerConnectionTuple p = new PlayerConnectionTuple(msg.playerID, msg.name, netMsg.conn);
+					ServerPlayer p = new ServerPlayer(msg.playerID, msg.name, netMsg.conn);
 					connectedPlayers.Add(p);
 
 					eventLog.AddTaggedEvent(serverTag, "Player connected: " + printPlayerName(p) + " from " + netMsg.conn.address, true);
 
-					ServerSendMessage(DodNet.MsgId.PlayerCon,
-						new DodNet.PlayerCon(p.player), DodChannels.reliable, connectedPlayers); // Inform everyone of the new player
+					ServerSendMessage(RPC.Message.ID.PlayerCon,
+						new RPC.Message.PlayerCon(p), RPC.Channels.reliable, connectedPlayers); // Inform everyone of the new player
 
-					ServerSendMessage(DodNet.MsgId.PlayerList,
-						new DodNet.PlayerList(getAllDodPlayers(connectedPlayers)), 
-						DodChannels.reliable, netMsg.conn); // Let the new player know the current state of the server
+					ServerSendMessage(RPC.Message.ID.PlayerList,
+						new RPC.Message.PlayerList(connectedPlayers), 
+						RPC.Channels.reliable, netMsg.conn); // Let the new player know the current state of the server
 				}
 			}
 			break;
-		case (short)DodNet.MsgId.KickReason:
+		case (short)RPC.Message.ID.KickReason:
 			{
-				DodNet.KickReason msg = netMsg.ReadMessage<DodNet.KickReason>();
+				RPC.Message.KickReason msg = netMsg.ReadMessage<RPC.Message.KickReason>();
 				eventLog.AddTaggedEvent(serverTag, "Tried to kick server. Reason: " + msg.reason, true);
 			}
 			break;
 
-		case (short)DodNet.MsgId.ConsoleBroadcast:
+		case (short)RPC.Message.ID.ConsoleBroadcast:
 			{
-				DodNet.ConsoleBroadcast msg = netMsg.ReadMessage<DodNet.ConsoleBroadcast>();
-				ServerSendMessage(DodNet.MsgId.ConsoleBroadcast, msg, DodChannels.reliable, connectedPlayers);
+				RPC.Message.ConsoleBroadcast msg = netMsg.ReadMessage<RPC.Message.ConsoleBroadcast>();
+				ServerSendMessage(RPC.Message.ID.ConsoleBroadcast, msg, RPC.Channels.reliable, connectedPlayers);
 			}
 			break;
 
-		case (short)DodNet.MsgId.NameChange:
+		case (short)RPC.Message.ID.NameChange:
 			{
-				DodNet.NameChange msg = netMsg.ReadMessage<DodNet.NameChange>();
-				PlayerConnectionTuple p;
-				if ( Dod.existPlayerByID(connectedPlayers, msg.playerID, out p) )
+				RPC.Message.NameChange msg = netMsg.ReadMessage<RPC.Message.NameChange>();
+				ServerPlayer p;
+				if ( common.existPlayerByID(connectedPlayers, msg.playerID, out p) )
 				{
-					if ( Dod.existPlayerByName(connectedPlayers, msg.newName ) ) // Name is already occupied
+					if ( common.existPlayerByName(connectedPlayers, msg.newName ) ) // Name is already occupied
 					{
-						ServerSendMessage(DodNet.MsgId.NameChange, new DodNet.NameChange(p.player.playerID, msg.newName, true), DodChannels.reliable, p.connection);
+						ServerSendMessage(RPC.Message.ID.NameChange, new RPC.Message.NameChange(p.id, msg.newName, true), RPC.Channels.reliable, p.connection);
 						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + "'s name change failed, to: " + msg.newName, true);
 					}
 					else // Acknowledge the name change
 					{
-						ServerSendMessage(DodNet.MsgId.NameChange, msg, DodChannels.reliable, connectedPlayers);
+						ServerSendMessage(RPC.Message.ID.NameChange, msg, RPC.Channels.reliable, connectedPlayers);
 						eventLog.AddTaggedEvent(serverTag, printPlayerName(p) + " is now known as " + msg.newName, true);
 					}
 
-					p.player.name = msg.newName;
+					p.name = msg.newName;
 				}
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerCon:
+		case (short)RPC.Message.ID.PlayerCon:
 			{
 				eventLog.AddTaggedEvent(serverTag, "PlayerCon received: " + netMsg.msgType, true);
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerDisc:
+		case (short)RPC.Message.ID.PlayerDisc:
 			{
 				eventLog.AddTaggedEvent(serverTag, "PlayerDisc received: " + netMsg.msgType, true);
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerList:
+		case (short)RPC.Message.ID.PlayerList:
 			{
 				// TODO: See this as a request for the player list ?
 				eventLog.AddTaggedEvent(serverTag, "PlayerList received: " + netMsg.msgType, true);
 			}
 			break;
 
-		case (short)DodNet.MsgId.HeartBeat:
+		case (short)RPC.Message.ID.HeartBeat:
 			{
 				// Do nothing, since this is not interresting for us
 			}
@@ -442,28 +444,28 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		switch(netMsg.msgType)
 		{
-		case (short)DodNet.MsgId.UserLogin:
+		case (short)RPC.Message.ID.UserLogin:
 			{
-				DodNet.UserLogin msg = netMsg.ReadMessage<DodNet.UserLogin>();
+				RPC.Message.UserLogin msg = netMsg.ReadMessage<RPC.Message.UserLogin>();
 				myID = msg.playerID;
-				ClientSendMessage(DodNet.MsgId.UserLogin,
-					new DodNet.UserLogin(myID, networkingInfo.playerName),
-					DodChannels.reliable);
+				ClientSendMessage(RPC.Message.ID.UserLogin,
+					new RPC.Message.UserLogin(myID, networkingInfo.playerName),
+					RPC.Channels.reliable);
 			}
 			break;
 
-		case (short)DodNet.MsgId.KickReason:
+		case (short)RPC.Message.ID.KickReason:
 			{
-				DodNet.KickReason msg = netMsg.ReadMessage<DodNet.KickReason>();
+				RPC.Message.KickReason msg = netMsg.ReadMessage<RPC.Message.KickReason>();
 				eventLog.AddTaggedEvent(clientTag, "Kicked from server. Reason: " + msg.reason, true);
 			}
 			break;
 
-		case (short)DodNet.MsgId.ConsoleBroadcast:
+		case (short)RPC.Message.ID.ConsoleBroadcast:
 			{
-				DodNet.ConsoleBroadcast msg = netMsg.ReadMessage<DodNet.ConsoleBroadcast>();
-				DodPlayer p;
-				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				RPC.Message.ConsoleBroadcast msg = netMsg.ReadMessage<RPC.Message.ConsoleBroadcast>();
+				Player p;
+				if ( common.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					eventLog.AddTaggedEvent(chatTag, p.name +  ": " + msg.broadcast, true);
 				}
@@ -474,11 +476,11 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
-		case (short)DodNet.MsgId.NameChange:
+		case (short)RPC.Message.ID.NameChange:
 			{
-				DodNet.NameChange msg = netMsg.ReadMessage<DodNet.NameChange>();
-				DodPlayer p;
-				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				RPC.Message.NameChange msg = netMsg.ReadMessage<RPC.Message.NameChange>();
+				Player p;
+				if ( common.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					if( msg.playerID == myID ) // Its me, check if it failed or not
 					{
@@ -504,11 +506,11 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerCon:
+		case (short)RPC.Message.ID.PlayerCon:
 			{
-				DodNet.PlayerCon msg = netMsg.ReadMessage<DodNet.PlayerCon>();
-				DodPlayer p;
-				allPlayersClient.Add(p = new DodPlayer(msg.playerID, msg.name));
+				RPC.Message.PlayerCon msg = netMsg.ReadMessage<RPC.Message.PlayerCon>();
+				Player p;
+				allPlayersClient.Add(p = new Player(msg.playerID, msg.name));
 				if(msg.playerID != myID)
 				{
 					eventLog.AddTaggedEvent(noTag, "Player connected: " + printPlayerName(p), true);
@@ -520,11 +522,11 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerDisc:
+		case (short)RPC.Message.ID.PlayerDisc:
 			{
-				DodNet.PlayerDisc msg = netMsg.ReadMessage<DodNet.PlayerDisc>();
-				DodPlayer p;
-				if ( Dod.existPlayerByID(allPlayersClient, msg.playerID, out p) )
+				RPC.Message.PlayerDisc msg = netMsg.ReadMessage<RPC.Message.PlayerDisc>();
+				Player p;
+				if ( common.existPlayerByID(allPlayersClient, msg.playerID, out p) )
 				{
 					eventLog.AddTaggedEvent(noTag, printPlayerName(p) + " disconnected. Reason: " + msg.reason, true);
 					allPlayersClient.Remove(p);
@@ -532,14 +534,14 @@ public class NetworkingTest : MonoBehaviour {
 			}
 			break;
 
-		case (short)DodNet.MsgId.PlayerList:
+		case (short)RPC.Message.ID.PlayerList:
 			{
-				DodNet.PlayerList msg = netMsg.ReadMessage<DodNet.PlayerList>();
+				RPC.Message.PlayerList msg = netMsg.ReadMessage<RPC.Message.PlayerList>();
 				allPlayersClient = msg.GetArrayAsList();
 			}
 			break;
 
-		case (short)DodNet.MsgId.HeartBeat:
+		case (short)RPC.Message.ID.HeartBeat:
 			{
 				// Do nothing, since this is not interresting for us
 			}
@@ -557,24 +559,14 @@ public class NetworkingTest : MonoBehaviour {
 
 	void registerAllDodCallbacks ( NetworkConnection nc, NetworkMessageDelegate nmd )
 	{
-		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
+		foreach (RPC.Message.ID MsgId in System.Enum.GetValues(typeof(RPC.Message.ID))) // Register all the callbacks
 			nc.RegisterHandler((short)MsgId, nmd);
 	}
 
 	void registerAllDodCallbacks ( NetworkClient nc, NetworkMessageDelegate nmd )
 	{
-		foreach (DodNet.MsgId MsgId in System.Enum.GetValues(typeof(DodNet.MsgId))) // Register all the callbacks
+		foreach (RPC.Message.ID MsgId in System.Enum.GetValues(typeof(RPC.Message.ID))) // Register all the callbacks
 			nc.RegisterHandler((short)MsgId, nmd);
-	}
-
-	List<DodPlayer> getAllDodPlayers(List<PlayerConnectionTuple> L)
-	{
-		List<DodPlayer> newList = new List<DodPlayer>();
-		foreach(PlayerConnectionTuple pct in connectedPlayers)
-		{
-			newList.Add(pct.player);
-		}
-		return newList;
 	}
 
 	byte giveUniquePlayerID()
@@ -584,7 +576,7 @@ public class NetworkingTest : MonoBehaviour {
 		do
 		{
 			newID = (byte)UnityEngine.Random.Range(PlayerIdsLowerBound, PlayerIdsUpperBound);
-		} while ( Dod.existPlayerByID( connectedPlayers, newID ) );
+		} while ( common.existPlayerByID( connectedPlayers, newID ) );
 		return newID;
 	}
 
@@ -592,9 +584,9 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		yield return new WaitForSeconds(0.01f);
 
-		ServerSendMessage(DodNet.MsgId.UserLogin,
-			new DodNet.UserLogin(newID, ""),
-			DodChannels.reliable, nc);
+		ServerSendMessage(RPC.Message.ID.UserLogin,
+			new RPC.Message.UserLogin(newID, ""),
+			RPC.Channels.reliable, nc);
 		// return null;
 	}
 
@@ -607,29 +599,30 @@ public class NetworkingTest : MonoBehaviour {
 			{
 				if(NetworkServer.active)
 				{
-					ServerSendMessage(DodNet.MsgId.HeartBeat, new DodNet.HeartBeat(), DodChannels.update, connectedPlayers);
+					ServerSendMessage(RPC.Message.ID.HeartBeat, new RPC.Message.HeartBeat(), 
+						RPC.Channels.update, connectedPlayers);
 				}
 			}
 			else
 			{
 				if(isConnectedAndAuthenticated())
 				{
-					ClientSendMessage(DodNet.MsgId.HeartBeat,
-						new DodNet.HeartBeat(), DodChannels.update);
+					ClientSendMessage(RPC.Message.ID.HeartBeat,
+						new RPC.Message.HeartBeat(), RPC.Channels.update);
 				}
 			}
 		}
 	}
 
-	string printPlayerName(DodPlayer p)
+	string printPlayerName(Player p)
 	{
-		if(networkingInfo.isServer) return p.name + "(" + p.playerID + ")";
+		if(networkingInfo.isServer) return p.name + "(" + p.id + ")";
 		return p.name;
 	}
-	string printPlayerName(PlayerConnectionTuple p)
+	string printPlayerName(ServerPlayer p)
 	{
-		if(networkingInfo.isServer) return p.player.name + "(" + p.player.playerID + ")";
-		return p.player.name;
+		if(networkingInfo.isServer) return p.name + "(" + p.id + ")";
+		return p.name;
 	}
 
 	string printServerAdress ()
@@ -645,8 +638,8 @@ public class NetworkingTest : MonoBehaviour {
 
 	public void SendChatMessage(string s)
 	{
-		ClientSendMessage(DodNet.MsgId.ConsoleBroadcast,
-			new DodNet.ConsoleBroadcast(myID, s), DodChannels.reliable);
+		ClientSendMessage(RPC.Message.ID.ConsoleBroadcast,
+			new RPC.Message.ConsoleBroadcast(myID, s), RPC.Channels.reliable);
 	}
 
 	public bool isConnected()
@@ -661,164 +654,4 @@ public class NetworkingTest : MonoBehaviour {
 	{
 		return ( isConnected() && isAuthenticated() );
 	}
-
-	// ===========================================================================
-	// ========================= UTILITY CLASSES =========================
-	// ===========================================================================
-
-	class DodNet
-	{
-		public enum MsgId 
-		{
-			UserLogin = JJMSG_ID_OFFSET,
-			KickReason,
-			ConsoleBroadcast,
-			NameChange,
-			PlayerCon,
-			PlayerDisc,
-			PlayerList,
-			HeartBeat,
-		}
-
-		public class UserLogin : MessageBase
-		{
-			// From Server to Client:
-			//  • Second-to-last part of handshake; Tell the user what his PlayerID is
-			//  • 
-			// From Client to Server:
-			//  • Last part of handshake; Tell server what the user's name is
-			//  • 
-			public UserLogin() {}
-			public UserLogin(byte id, string Name) { playerID = id; name = Name; }
-
-			public byte playerID;
-			public string name;
-		}
-
-		public class KickReason : MessageBase
-		{
-			// From Server to Client:
-			//  • Kick a user and tell them the reason
-			//  • 
-			// From Client to Server:
-			//  • N/A
-			//  • 
-			public KickReason() {}
-			public KickReason(string Reason) { reason = Reason; }
-
-			public string reason;
-		}
-
-		public class ConsoleBroadcast : MessageBase
-		{
-			// From Server to Client:
-			//  • Relaying chat messages
-			//  • Broadcasting any useful information to users' consoles
-			//  •
-			// From Client to Server:
-			//  • Chat messages
-			//  • 
-			public ConsoleBroadcast() {}
-			public ConsoleBroadcast(byte id, string bc) { playerID = id; broadcast = bc; }
-
-			public byte playerID;
-			public string broadcast;
-		}
-
-		public class NameChange : MessageBase
-		{
-			// From Server to Client:
-			//  • Tell the user that the name change failed, since the name is already occupied
-			//  • Tell the receiver that this user has changed his name
-			//  • 
-			// From Client to Server:
-			//  • Inform the server that the user wants to change his name
-			//  • 
-			public NameChange() {}
-			public NameChange(byte id, string Name, bool Failed = false) { playerID = id; newName = Name; failed = Failed; }
-
-			public byte playerID;
-			public string newName;
-			public bool failed;
-		}
-
-		public class PlayerCon : MessageBase
-		{
-			// From Server to Client:
-			//  • Tell the receiver that this user has connected
-			//  • 
-			// From Client to Server:
-			//  • N/A
-			//  • 
-			public PlayerCon() {}
-			public PlayerCon(DodPlayer p) { playerID = p.playerID; name = p.name; }
-
-			public byte playerID;
-			public string name;
-		}
-
-		public class PlayerDisc : MessageBase
-		{
-			// From Server to Client:
-			//  • Tell the receiver that this user has disconnected
-			//  • 
-			// From Client to Server:
-			//  • N/A
-			//  • 
-			public PlayerDisc() {}
-			public PlayerDisc(byte id, string Reason) { playerID = id; reason = Reason; }
-
-			public byte playerID;
-			public string reason;
-		}
-
-		public class PlayerList : MessageBase
-		{
-			// From Server to Client:
-			//  • Relay the list of currently connected users to the receiver
-			//  • 
-			// From Client to Server:
-			//  • N/A
-			//  • TODO: Request the list of currently connected users ? 
-			//    (This should never be required, since all player list updates are sent when a player connects or disconnects, over the reliable channel)
-			//  • 
-			public PlayerList() {}
-			public PlayerList(List<DodPlayer> List) { array = List.ToArray(); }
-
-			public DodPlayer[] array;
-
-
-			public List<DodPlayer> GetArrayAsList ()
-			{
-				List<DodPlayer> L = new List<DodPlayer>();
-				foreach(DodPlayer p in array)
-				{
-					L.Add(p);
-				}
-				return L;
-			}
-		}
-
-		public class HeartBeat : MessageBase
-		{
-			// From Server to Client:
-			//  • Probe the connection (Right now, these message are not handled at the receiver)
-			//  • 
-			// From Client to Server:
-			//  • Probe the connection (Right now, these message are not handled at the receiver)
-			//  • 
-			public HeartBeat() {}
-		}
-	}
-}
-
-public class NetworkingInfo
-{
-	public string playerName = "";
-	public int port = -1;
-	public string address = "";
-	public bool isServer = false;
-
-	public const int defaultPort = 47624;
-	public const string defaultAddress = "127.0.0.1";
 }

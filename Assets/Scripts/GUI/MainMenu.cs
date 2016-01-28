@@ -89,7 +89,7 @@ public class MainMenu : MonoBehaviour
 
 		if( currentCanvas == canvasHost || currentCanvas == canvasJoin )
 		{
-			GameController.Instance.resetNetworking();
+			GameController.Instance.networkingInfo.reset();
 		}
 	}
 
