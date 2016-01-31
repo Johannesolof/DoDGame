@@ -46,7 +46,10 @@ namespace RPC
 		}
 		public void printConsole(string tag, string s, bool sendToDebug = false)
 		{
-			string msg = "[" + tag + "] " + s;
+			string msg;
+			if (tag != "") msg = "[" + tag + "] " + s;
+			else msg = s;
+
 			onConsole (msg);
 			if (sendToDebug) {
 				Debug.Log (msg);
@@ -204,15 +207,4 @@ namespace RPC
 			isServer = false;
 		}
 	}
-
-	class Channels
-	{
-		static public byte priority; // For important, reliable one shot events
-		static public byte reliable; // For important events, such as player action
-		static public byte unreliable; // For slow events, such as camera stream
-		static public byte fragmented; // For large events, such as file transfer
-		static public byte update; // For spammed events, such as object movement
-	}
-
-
 }

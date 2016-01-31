@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class PlayerLog : MonoBehaviour 
 {
 	// Private VARS
-	NetworkingTest networkingTest;
+	NetworkController netController;
 	List<string> Eventlog = new List<string>();
 	string guiTextToShow = "";
 
@@ -32,7 +32,7 @@ public class PlayerLog : MonoBehaviour
 
 
 	void Start () {
-		networkingTest = GetComponent<NetworkingTest>();
+		netController = GetComponent<NetworkController>();
 
 		border = Resources.Load("Images/border") as Texture2D;
 
@@ -86,7 +86,7 @@ public class PlayerLog : MonoBehaviour
 						GUI.GetNameOfFocusedControl() == "chatbox" &&
 						chatMessage != "")
 					{
-						networkingTest.SendChatMessage(chatMessage);
+						netController.SendChatMessage(chatMessage);
 						chatMessage = "";
 					}
 					GUILayout.Space(2);
@@ -117,6 +117,19 @@ public class PlayerLog : MonoBehaviour
 		}
 	}
 
+	public void AddEvent(string eventString)
+	{
+		if (autoScroll)
+			scrollPos = new Vector2 (float.PositiveInfinity, float.PositiveInfinity);
+
+		string time = System.DateTime.Now.Hour + ":" + System.DateTime.Now.Minute + ":" + System.DateTime.Now.Second;
+		Eventlog.Add("[" + time + "] " + eventString);
+
+		if (Eventlog.Count > maxLines)
+			Eventlog.RemoveAt(0);
+
+		recalcDisplay();
+	}
 
 	void AddEvent(string eventString, bool sendToDebugLog = false, bool sendOverNetwork = false)
 	{

@@ -95,7 +95,6 @@ public class MainMenu : MonoBehaviour
 
 	void HostSession()
 	{
-		Debug.Log("on HostSession()");
 		GameController.Instance.networkingInfo.isServer = true;
 		GameController.Instance.SceneLoader("NetScene");
 	}

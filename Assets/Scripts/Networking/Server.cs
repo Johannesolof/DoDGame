@@ -8,7 +8,6 @@ using UnityEngine.Networking;
 
 namespace RPC
 {
-	
 	public class Server 
 	{
 		// CONSTANTS
@@ -41,15 +40,22 @@ namespace RPC
 		{
 			onClient -= a;
 		}
+		void OnClient()
+		{
+			if(onClient != null)
+			{
+				onClient();
+			}
+		}
 		public Queue<NetworkConnection> getPendingConnections()
 		{
 			return pendingConnections;
 		}
 
 		// CONSTRUCTOR
-		public Server()
+		public Server(NetworkingInfo netinfo)
 		{
-			networkingInfo = GameController.Instance.networkingInfo;
+			networkingInfo = netinfo;
 			if(networkingInfo.port == -1) networkingInfo.port = NetworkingInfo.defaultPort;
 			if(networkingInfo.address == "") networkingInfo.address = NetworkingInfo.defaultAddress;
 			// TODO: Add some kind of DNS pre check for IP?
@@ -81,6 +87,24 @@ namespace RPC
 			NetworkServer.Reset();
 		}
 
+		public void Tick (float ackumulativeTimeSinceStart)
+		{
+			if( ackumulativeTimeSinceStart > lastHeartBeat + heartBeatTimeOut )
+			{
+				lastHeartBeat = ackumulativeTimeSinceStart;
+				// TODO: Check this muditrucker
+				if( networkingInfo.isServer )
+				{
+					if(NetworkServer.active)
+					{
+						ServerSendMessage(RPC.Message.ID.HeartBeat, new RPC.Message.HeartBeat(), 
+							Channels.update, connectedPlayers);
+					}
+				}
+			}
+		}
+
+
 		// ===========================================================================
 		// ========================= NETWORKING CALLBACK FUNCTIONS =========================
 		// ===========================================================================
@@ -108,7 +132,7 @@ namespace RPC
 					whiteList.Remove(netMsg.conn.address);
 				}
 				pendingConnections.Enqueue(netMsg.conn);
-				onClient (); // Signal to all listeners that a new client is ready to be accepted
+				OnClient (); // Signal to all listeners that a new client is ready to be accepted
 			}
 		}
 
@@ -124,8 +148,8 @@ namespace RPC
 			byte newID = giveUniquePlayerID();
 
 			// TODO: Check this Modifacka
-			Timer t = new Timer (((data) => {serverDelayBeforeSendingHandshake(newID, nc);}), 
-				null, 0, handshakeTimeoutMs);
+			new Timer(((data) => {serverDelayBeforeSendingHandshake(newID, nc);}), 
+				null, handshakeTimeoutMs, Timeout.Infinite);
 
 //			StartCoroutine( serverDelayBeforeSendingHandshake(newID, nc) );
 		}
@@ -150,6 +174,7 @@ namespace RPC
 					Channels.reliable, connectedPlayers);
 			}
 		}
+
 
 		// ===========================================================================
 		// ========================= SEND FUNCTIONS =========================
@@ -187,6 +212,7 @@ namespace RPC
 			}
 		}
 
+
 		// ===========================================================================
 		// ========================= CALLBACK FUNCTIONS =========================
 		// ===========================================================================
@@ -197,7 +223,8 @@ namespace RPC
 			if ( !whiteList.ContainsKey(netMsg.conn.address) )
 			{
 				// User is not yet white listed, or should not be. Just kick and forget about him
-				common.printConsole (tag, "Kicked chatty not white-listed peer: " + netMsg.conn.address, true);
+				common.printConsole (tag, "Kicked chatty not white-listed peer: " + netMsg.conn.address + "(" + netMsg.msgType + ")", true);
+				netMsg.ReadMessage<Message.NameChange>();
 				netMsg.conn.Disconnect();
 				return;
 			}
@@ -300,6 +327,7 @@ namespace RPC
 			}
 		}
 
+
 		// ===========================================================================
 		// ========================= UTILITY FUNCTIONS =========================
 		// ===========================================================================
@@ -323,7 +351,6 @@ namespace RPC
 
 		byte giveUniquePlayerID()
 		{
-			// TODO: Maybe not having this being random?
 			byte newID = 0;
 			do
 			{
@@ -342,6 +369,20 @@ namespace RPC
 			ServerSendMessage(Message.ID.UserLogin,
 				new Message.UserLogin(newID, ""),
 				Channels.reliable, nc);
+		}
+
+
+		// ===========================================================================
+		// ========================= UTILITY CLASSES =========================
+		// ===========================================================================
+
+		class Channels
+		{
+			static public byte priority; // For important, reliable one shot events
+			static public byte reliable; // For important events, such as player action
+			static public byte unreliable; // For slow events, such as camera stream
+			static public byte fragmented; // For large events, such as file transfer
+			static public byte update; // For spammed events, such as object movement
 		}
 	}
 }
