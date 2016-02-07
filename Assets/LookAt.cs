@@ -16,11 +16,8 @@ public class LookAt : MonoBehaviour
     private Zooming _zoom;
     private Camera _camera;
     private bool _draging;
-    private RaycastHit _dragPrevPos;
     private CameraPosition _defaultTransform;
     private CameraPosition _zoomTransform;
-    private Vector3 _screenPoint;
-    private Vector3 _offset;
     private float _lerp;
     private float _defaultFov;
     private float _zoomFov;
@@ -36,31 +33,31 @@ public class LookAt : MonoBehaviour
         _camera = GetComponent<Camera>();
         _defaultTransform = new CameraPosition(transform);
         _defaultFov = _camera.fieldOfView;
+        _hit = new RaycastHit();
     }
 
     // Update is called once per frame
     void Update()
     {
+        if (Input.GetMouseButtonDown(0)) _draging = true;
+        if (Input.GetMouseButtonUp(0)) _draging = false;
         Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-        _isHit = Physics.Raycast(ray, out hit, 100);
+        if (_draging)
+            _isHit = _draging = Physics.Raycast(ray, out _hit, 100) && _hit.transform.tag == "Zoomable";
 
 
-            switch (_zoom)
+        switch (_zoom)
         {
             case Zooming.NotZoomed:
                 if (Input.GetMouseButtonDown(0))
                 {
-                    if (_isHit && hit.transform.tag == "Zoomable")
+                    if (_isHit)
                     {
-                        GameObject temp = new GameObject();
-                        //var tf = gameObject.AddComponent<Transform>();
+                        var temp = new GameObject();
 
-
-                        temp.transform.position = hit.transform.up * 2.2f + hit.transform.position;
-
-
-                        temp.transform.LookAt(hit.transform);
+                        temp.transform.position = _hit.transform.up * 2.2f + _hit.transform.position;
+                        
+                        temp.transform.LookAt(_hit.transform);
                         _zoomTransform = new CameraPosition(temp.transform);
 
                         _zoom = Zooming.ZoomingIn;
@@ -92,16 +89,15 @@ public class LookAt : MonoBehaviour
 
                 break;
             case Zooming.Zoomed:
-                if (Input.GetMouseButton(0))
+                if (_draging)
                 {
-                    if (_isHit && hit.transform.tag == "Zoomable")
+                    if (_isHit)
                     {
                         if (Input.GetMouseButtonDown(0))
                         {
-                            _offset = transform.position - hit.point;
-                            _prevPoint = hit.point;
+                            _prevPoint = _hit.point;
                         }
-                        Vector3 delta = _prevPoint - hit.point;
+                        var delta = _prevPoint - _hit.point;
                         _camera.transform.position += new Vector3(delta.x, 0, delta.z);
                     }
                     break;
@@ -127,9 +123,9 @@ public class LookAt : MonoBehaviour
         }
 
         ray = _camera.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out hit, 100))
+        if (Physics.Raycast(ray, out _hit, 100))
         {
-            _prevPoint = hit.point;
+            _prevPoint = _hit.point;
         }
     }
 }
